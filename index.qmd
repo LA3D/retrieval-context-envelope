@@ -29,7 +29,7 @@ abstract: |
 RAG is not about answering questions. It is about assembling a **context envelope**: the local neighborhood of concepts, layout, and cross-document evidence around the question. When the envelope is missing, the language model cannot answer, even when the strictly correct chunk is in the top-K. Dense retrieval assembles the envelope well when it fits inside a small K. Once the envelope is spread across a graph that similarity cannot traverse, the assembly job is not a retrieval problem anymore. It is a trajectory problem.
 :::
 
-The rest of this page unpacks what that means, why it matters, and what an alternative looks like. The [data appendix](appendix.qmd) has the underlying numbers.
+The rest of this page unpacks what that means, why it matters, and what an alternative looks like.
 
 [The failure mode]{.kicker}
 
@@ -150,10 +150,24 @@ More on this in follow-up notes as the theory gets written up.
 
 ## Where to go from here
 
-- **[Data appendix](appendix.qmd)**: the K = 10 coverage table, methodology, and reproduction script.
-- **The WGRA talk**: full slides at [chrissweet.github.io/wgra-talk-2026](https://chrissweet.github.io/wgra-talk-2026/) if you want the visual walk-through.
+- **The WGRA talk**: full slides at [chrissweet.github.io/wgra-talk-2026](https://chrissweet.github.io/wgra-talk-2026/) for the visual walk-through.
 - **The wiki-memory template**: [github.com/crcresearch/llm-wiki-memory-template](https://github.com/crcresearch/llm-wiki-memory-template) for the pattern that makes graph construction a side effect of writing.
 - **The Markov RAG source**: [github.com/tcflab/markov_embeddings_and_rag](https://github.com/tcflab/markov_embeddings_and_rag) for the embedding-and-walk pipeline.
+
+[Methods]{.kicker}
+
+## How the K = 10 coverage numbers were produced
+
+MuSiQue [@trivedi2022musique] answerable split, 21,100 candidate paragraphs across the whole benchmark, 90 held-out TEST questions (30 each at 2-, 3-, 4-hop). Retriever is plain dense: cosine similarity between question and paragraph embeddings, mpnet, L2-normalized. No entity layer, no walk, no sub-questions. This is the out-of-the-box baseline; that is the point.
+
+The coverage table is a `numpy.count_nonzero` on rank arrays from a single JSON artifact:
+
+```bash
+python -m experiments.musique.sparql.design.vanilla_dense_positions --scope full
+# writes cache/p3v5/vanilla_dense_21k.json
+```
+
+The standard production pattern of *retrieve a large candidate pool with a cheap dense or BM25 hybrid, then rerank down to K = 10 with a cross-encoder* recovers shallow multi-hop chunks the base retriever surfaces late but does not reach chunks it does not surface at all. A chunk ranked at 1,796 is not in any candidate pool a reranker would receive.
 
 ## References {.unnumbered}
 

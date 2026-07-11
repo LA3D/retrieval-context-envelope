@@ -10,7 +10,7 @@ Most public writing about RAG treats retrieval as "find the chunk that answers t
 
 Dense similarity search is one way to assemble an envelope, and it works well when the envelope fits inside a small K. It breaks when the envelope is spread across a graph that similarity cannot traverse. The site lays out why, and shows what a graph-based Markov retrieval looks like as an alternative.
 
-The core content lives in `index.qmd`. Full rank tables and methodology live in `appendix.qmd`.
+The whole site is `index.qmd` plus the embedded RWR animation in `assets/`. There is no separate data appendix, everything the argument depends on is on the landing page.
 
 ## Why a site, not a paper?
 
