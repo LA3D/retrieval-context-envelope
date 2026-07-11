@@ -85,34 +85,56 @@ Because question decomposition operates on the *question side*. It reduces the r
 
 [The mechanism]{.kicker}
 
-## Retrieval as a trajectory
+## Retrieval as a trajectory in graph space
 
-The alternative to "one query, top-K by similarity" is "walk the graph." The graph can be deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a **random walk with restart** gives you a stationary distribution that captures where information *tends to cluster*:
+The shift from dense RAG to graph-informed retrieval is a shift of the space the retriever works in.
+
+Dense retrieval lives in **document space**. Every chunk is a point on a continuous embedding manifold, and "close" means small cosine distance along that manifold. When the manifold happens to align with the reasoning structure the answer needs, this works. When the answer chain requires connecting two chunks that use different surface language to describe the same underlying thing, the manifold cannot help. The chunks are far apart in embedding space because their tokens differ, and cosine has no memory of the corpus-level relationships that would tell you otherwise.
+
+Graph-informed retrieval lives in **graph space**. Nodes are chunks and the entities extracted from those chunks. Edges are structural: a chunk is linked to every entity that appears in it. Two chunks are "close" not because their surface tokens are similar but because they mention the same entities. Retrieval becomes a walk on this discrete structure. The relationships the embedding did not encode are the edges the walk follows.
+
+Formally, a **random walk with restart** produces a stationary distribution over the graph:
 
 $$
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
 $$
 
-The walker restarts at a seed node with probability $c$, otherwise it follows an outbound edge, and it repeats until the distribution $\boldsymbol{\pi}$ stops moving. The result is a personalized-PageRank score over the whole graph, one score per node, telling you how much local neighborhood a node absorbs from the seed.
+The walker restarts at a seed distribution $\boldsymbol{\pi}_0$ with probability $c$, otherwise follows an outbound edge, and iterates until $\boldsymbol{\pi}$ stops moving. The result is a personalized-PageRank score over every node, telling you how much neighborhood a node absorbs from the seed. This is a *local* computation in graph space in the same way a top-K cosine query is a *local* computation in document space: both surface the neighborhood near a probe, but they measure the neighborhood on completely different structures.
 
 The animation below runs this. Yellow nodes are the seed set; darker nodes have accumulated more probability mass through the walk; the graph structure controls where the mass ends up.
 
 ::: {.simulation-frame}
 <iframe src="assets/rwr_animation.html" height="620" title="Random-walk-with-restart simulation"></iframe>
 ::: {.simulation-caption}
-Live simulation by Priscila Moreira. Refresh the page or click a node to reseed. What matters visually: mass flows along dense sub-graphs, and short paths through concept edges pull mass across document boundaries that similarity search would treat as unrelated.
+Live simulation by Priscila Moreira. Refresh the page or click a node to reseed. What matters visually: mass flows along dense sub-graphs, and short paths through shared entities pull mass across document boundaries that similarity search would treat as unrelated.
 :::
 :::
 
 ### Why the walk happens *before* the question arrives
 
-The RWR is not run at query time. The stationary distribution is computed once, offline, and cached. When a question comes in, the retrieval step is:
+The RWR is not run at query time. The stationary distribution is computed once, offline, and cached against the corpus. When a question comes in, the retrieval step is:
 
-1. Use similarity to identify a small seed set of chunks or concepts related to the question.
-2. Read off the pre-computed walk-informed neighborhood around that seed.
+1. Seed a distribution $\boldsymbol{\pi}_0$ from the question.
+2. Read off the walk-informed neighborhood around that seed.
 3. Re-rank the neighborhood locally against the question.
 
-This is why "just decompose the question" is not a substitute. The graph structure that the walk discovered is already there. The question is used to *choose which walk-informed neighborhood to pull*, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.
+This is why "just decompose the question" is not a substitute. The graph the walk discovered is already there. The question is used to *choose which walk-informed neighborhood to pull*, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.
+
+[Concepts as closeness]{.kicker}
+
+## Entity similarity as a surrogate for entity resolution
+
+If graph edges are what make retrieval work, the graph has to encode conceptual closeness somehow. Two chunks that discuss the same underlying thing should be linked even when they use different surface words for it.
+
+The classical way to do this is **entity resolution**: cluster every surface mention of "Barack Obama," "President Obama," and "Obama" into one canonical entity node. Do this hard-clustering step across the whole corpus, once, and now chunks about the same entity share a graph neighbor no matter which surface form they use.
+
+Entity resolution is expensive, brittle, and rarely worth it at scale. It requires a global pass, disambiguation rules, and re-runs whenever the corpus changes. What we do instead is skip the hard clustering and let the **initial conditions do the resolution work**.
+
+The entity layer of the graph keeps surface forms distinct: "Barack Obama," "President Obama," and "Obama" are separate nodes. The seed distribution $\boldsymbol{\pi}_0$ is a softmax over question-vs-entity similarity, computed against every entity label the corpus contains. A question about the Obama administration seeds mass across every surface form of Obama at once, weighted by how close each label sits to the question in embedding space. The walk propagates that mass along chunk-entity edges, and mass accumulates at chunks that any of the seeded surface forms can reach.
+
+Entities that mean the same thing get similarly seeded, and they reach similar chunk neighborhoods through the walk. Entities that share nothing but a surface token (Washington the person vs Washington the state) get seeded together only if the question is genuinely ambiguous, and the walk pulls them into separate neighborhoods. The soft resolution happens at query time, driven by the question, without ever committing to a hard clustering the corpus may not support.
+
+This is what "entity similarity as initial conditions" means concretely, and it is what makes the approach cheap to deploy: no preprocessing pass over the corpus, no per-domain disambiguation rules, no re-runs when new documents arrive.
 
 [Why the framing matters]{.kicker}
 
@@ -121,20 +143,10 @@ This is why "just decompose the question" is not a substitute. The graph structu
 The failure table above says nothing about whether *any* graph-informed retriever solves the problem in practice. That is an empirical question with an empirical answer, and it is a follow-up. What the framing changes is what you are looking for when you build a retriever in the first place.
 
 - Stop optimizing embeddings. `g_1` is at rank 1 for every hop count already. Another point of MTEB is not going to move the 4-hop `g_4` from rank 1,796 to rank 10.
-- Start thinking about the graph the evidence actually lives on. If the corpus has links (wikis, citations, typed frontmatter) the graph is free. If it does not, an entity layer is a cheap substitute.
-- Treat retrieval as a two-step: assemble the envelope on the graph (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.
+- Start thinking about the graph the evidence lives on. Wikis and citation networks give you one for free. Corpora that do not come with links get an entity layer, and question-seeded walks over that layer substitute for hard entity resolution.
+- Treat retrieval as a two-step: assemble the envelope in graph space (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.
 
 This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.
-
-[Deeper]{.kicker}
-
-## Operator splitting
-
-The RWR update $\boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}$ is a fixed-point iteration for a linear operator: a convex combination of the restart operator (which localizes) and the transition operator (which diffuses). This is a Douglas-Rachford-style split, and it lets you reason about which corpus properties affect which operator. Restart probability controls how far the mass travels from the seed before restarting; edge structure controls what the diffusion looks like when it does travel.
-
-The practical upshot: tuning the retrieval is not a matter of picking a better embedding. It is a matter of adjusting the two operators. Restart up if the walk is drifting too far. Add edges if the mass is not reaching the neighborhoods where the evidence lives.
-
-More on this in follow-up notes as the theory gets written up.
 
 [Practical takeaways]{.kicker}
 
