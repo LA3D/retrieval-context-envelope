@@ -17,10 +17,10 @@ abstract: |
   "find the chunk that answers the question." This site argues that framing is
   wrong at scale. What retrieval has to assemble is a *context envelope*: the
   local neighborhood of concepts, layout cues, and cross-document evidence
-  around the question. Dense similarity search is one way to build an envelope
-  when it fits in a small top-K. When the envelope is spread across a graph
-  that similarity cannot traverse, a graph-informed retrieval, formalized as a
-  random walk with restart, does the assembly work that dense retrieval cannot.
+  around the question. Dense similarity search assembles the envelope well
+  when it fits inside a small top-K. When it does not, the assembly job stops
+  being a retrieval problem and becomes a trajectory problem: a walk over a
+  graph the embedding does not encode.
 ---
 
 [The claim]{.kicker}
@@ -29,34 +29,18 @@ abstract: |
 RAG is not about answering questions. It is about assembling a **context envelope**: the local neighborhood of concepts, layout, and cross-document evidence around the question. When the envelope is missing, the language model cannot answer, even when the strictly correct chunk is in the top-K. Dense retrieval assembles the envelope well when it fits inside a small K. Once the envelope is spread across a graph that similarity cannot traverse, the assembly job is not a retrieval problem anymore. It is a trajectory problem.
 :::
 
-The rest of this page unpacks what that means, why it matters, and what an alternative looks like. The [data appendix](appendix.qmd) has the underlying rank tables and methodology.
+The rest of this page unpacks what that means, why it matters, and what an alternative looks like. The [data appendix](appendix.qmd) has the underlying numbers.
 
 [The failure mode]{.kicker}
 
-## Dense RAG at scale
+## Dense RAG at K = 10
 
-Dense retrieval on a modest corpus, of order a thousand chunks, and a question that needs one chunk to answer, is very good. It is the case most public benchmarks are built around, and it is the case the "just do RAG" advice was written for.
-
-Multi-hop QA at scale is a different problem. MuSiQue [@trivedi2022musique] provides a stress test: 21,100 candidate paragraphs, questions that require chaining evidence across two, three, or four documents, and a rank distribution that collapses hop by hop. Concretely, on the MuSiQue TEST set with plain dense retrieval, the *rank* of each gold chunk:
-
-| Hop group  | Direct-match chunk | Bridge chunk | Deeper bridge | Deepest chunk |
-|------------|-------------------:|-------------:|--------------:|--------------:|
-| 2-hop      | median rank **1**  | **143**      |               |               |
-| 3-hop      | **1**              | 13           | **101**       |               |
-| 4-hop      | **1**              | 45           | 268           | **1,796**     |
-
-The direct-match chunk lands at rank 1 at every hop count, even against 21,000 distractors. Cosine similarity finds it every time. Every chunk after that scatters. The deepest chunk of a 4-hop question sits at median **rank 1,796**, p75 3,027, worst case 9,572. Dense retrieval on this corpus is not returning noise; it is returning the *wrong specific evidence*, which is worse.
-
-This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is *for*. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.
-
-### The K question sharpens this
-
-Two constants set the operating envelope:
+Two constants set the operating envelope for production RAG:
 
 - **K = 10** is the modal production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the language model actually attends to. This is the number to design against.
-- **K = 30** is the *upper bound*, the point at which *lost-in-the-middle* effects [@liu2023lostmiddle] start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of "just retrieve more."
+- **K = 30** is the *upper bound*, the point at which *lost-in-the-middle* effects [@liu2023lostmiddle] start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in the middle of a long context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of "just retrieve more."
 
-What the language model actually sees at K = 10 on the 21k corpus, per hop group (fraction of TEST questions whose slot-`i` gold chunk lands inside the top 10):
+What plain dense retrieval delivers to the language model at K = 10 on a 21,100-chunk MuSiQue [@trivedi2022musique] corpus, per hop group (fraction of TEST questions whose slot-`i` gold chunk lands inside the top 10):
 
 | Hop group | g1   | g2   | g3   | g4   |
 |-----------|-----:|-----:|-----:|-----:|
@@ -64,9 +48,11 @@ What the language model actually sees at K = 10 on the 21k corpus, per hop group
 | 3-hop     |  97 %|  37 %|   0 %|      |
 | 4-hop     |  87 %|  23 %|   3 %|   0 %|
 
-The direct-match chunk is essentially always in front of the model. Everything else drops off a cliff. For a 4-hop question, the model receives `g_1` in 87 % of cases and effectively nothing else; the deepest chunk (`g_4`) lands inside K = 10 for zero out of thirty questions.
+Read the table by row. `g_1` is the gold chunk the retriever ranks highest for a question, `g_2` the next, and so on. Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop count. Everything else falls off a cliff. For a 4-hop question, the language model receives one gold chunk out of the four the answer chain requires, and the deepest chunk lands inside K = 10 for zero out of thirty questions.
 
-Raising to K = 30 recovers some middle chunks but does not touch the tail: 4-hop `g_3` climbs to 13 %, 4-hop `g_4` stays at **0 %**. Even at K = 100, 4-hop `g_4` is only **7 %**. This is the shape that matters. The failure is not a coverage bug you can fix by turning K up. It is a ranking failure: the deep chunks are in the corpus, and dense retrieval sorts them far below the direct-match. See the [data appendix](appendix.qmd) for the full K = 5 / 10 / 30 / 100 sweep.
+The failure is not that the deep chunks are missing from the corpus. It is that dense retrieval ranks them into the thousands: the 4-hop `g_4` median rank is **1,796** out of 21,100. Raising K past the K = 30 ceiling does not save it, because a chunk ranked at 1,796 is nowhere near the pool a reranker would even see. This is a ranking gap, not a recall gap, and turning the retriever dial does not close it.
+
+This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is *for*. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.
 
 [On terminology]{.kicker}
 
@@ -90,7 +76,7 @@ Because question decomposition operates on the *question side*. It reduces the r
 
 ## Retrieval as a trajectory
 
-The alternative to "one query, top-K by similarity" is "walk the graph." The graph used in the results below is deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a **random walk with restart** gives you a stationary distribution that captures where information *tends to cluster*:
+The alternative to "one query, top-K by similarity" is "walk the graph." The graph can be deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a **random walk with restart** gives you a stationary distribution that captures where information *tends to cluster*:
 
 $$
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
@@ -117,18 +103,17 @@ The RWR is not run at query time. The stationary distribution is computed once, 
 
 This is why "just decompose the question" is not a substitute. The graph structure that the walk discovered is already there. The question is used to *choose which walk-informed neighborhood to pull*, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.
 
-[The result]{.kicker}
+[Why the framing matters]{.kicker}
 
-## What this buys you
+## What this changes
 
-On the 281-chunk gold-only subset, the chain closes the ranking gap on exactly the chunks dense retrieval buries. `g_1` is a tie at rank 1 for both retrievers, as it should be. The 2-hop bridge chunk (`g_2`) drops from a dense p75 of **17** to a chain p75 of **3**. The 4-hop deepest chunk (`g_4`) drops from a dense p75 of **65** to a chain p75 of **29**. Full tables and the metric definition are in the [data appendix](appendix.qmd).
+The failure table above says nothing about whether *any* graph-informed retriever solves the problem in practice. That is an empirical question with an empirical answer, and it is a follow-up. What the framing changes is what you are looking for when you build a retriever in the first place.
 
-The honest caveats:
+- Stop optimizing embeddings. `g_1` is at rank 1 for every hop count already. Another point of MTEB is not going to move the 4-hop `g_4` from rank 1,796 to rank 10.
+- Start thinking about the graph the evidence actually lives on. If the corpus has links (wikis, citations, typed frontmatter) the graph is free. If it does not, an entity layer is a cheap substitute.
+- Treat retrieval as a two-step: assemble the envelope on the graph (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.
 
-- The strongest evidence right now is on the *gold-only* subset, where every gold chunk is guaranteed to be present in the corpus. This isolates the retrieval-*ranking* problem from the recall problem, and is where the chain has been fully evaluated.
-- **The 21k-scale chain-vs-dense comparison is not run yet.** The dense side is measured (`g_4` median 1,796). The chain at scale is deferred, blocked on a ~\$300 distillation step. The 21k number in this section will change from projection to measurement as that run lands. Do not cite the chain at scale until then.
-- One reversal: the chain's worst-case 4-hop `g_4` (max 206) is worse than dense's (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury one worse than dense would. This is a known RWR failure mode, not a metric artifact.
-- Graph construction is not free. If the corpus does not come with links, an entity layer has to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing.
+This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.
 
 [Deeper]{.kicker}
 
@@ -154,7 +139,7 @@ More on this in follow-up notes as the theory gets written up.
 
 ## Where to go from here
 
-- **[Data appendix](appendix.qmd)**: the rank tables, the gold-only comparison, the methodology.
+- **[Data appendix](appendix.qmd)**: the K = 10 coverage table, methodology, and reproduction script.
 - **The WGRA talk**: full slides at [chrissweet.github.io/wgra-talk-2026](https://chrissweet.github.io/wgra-talk-2026/) if you want the visual walk-through.
 - **The wiki-memory template**: [github.com/crcresearch/llm-wiki-memory-template](https://github.com/crcresearch/llm-wiki-memory-template) for the pattern that makes graph construction a side effect of writing.
 - **The Markov RAG source**: [github.com/tcflab/markov_embeddings_and_rag](https://github.com/tcflab/markov_embeddings_and_rag) for the embedding-and-walk pipeline.
