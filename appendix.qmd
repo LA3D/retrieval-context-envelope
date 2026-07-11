@@ -37,7 +37,7 @@ Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop co
 
 *Lost-in-the-middle* [@liu2023lostmiddle] shows a U-shaped attention curve: language models attend well to the start and end of a long context and poorly to the middle. The penalty is measurable across both open-source and commercial models. Around K = 30 the middle-position attention penalty starts costing more accuracy than the extra recall buys back. Above K = 30 you are trading retriever recall against the model's ability to use what you retrieved.
 
-K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely, every chunk in a position the model attends to well. The now-standard pattern is *retrieve K = 50-100 with a cheap dense-or-BM25 hybrid, then rerank down to K = 5-10 with a cross-encoder*. That helps for shallow multi-hop where the missing chunk is in the K = 100 candidate pool. It cannot help the 4-hop deepest chunk, because a chunk buried at rank 1,796 is not in the pool the reranker sees.
+K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely, every chunk in a position the model attends to well. The now-standard pattern is *retrieve a large candidate pool with a cheap dense-or-BM25 hybrid, then rerank down to K = 10 with a cross-encoder*. That helps for shallow multi-hop where the missing chunk is in the initial pool. It cannot help the 4-hop deepest chunk: a chunk ranked at 1,796 is not in any candidate pool a reranker would receive.
 
 [Caveats]{.kicker}
 
