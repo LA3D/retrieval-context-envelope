@@ -316,7 +316,35 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<p>Read the table by row. <code>g_1</code> is the gold chunk the retriever ranks highest for a question, <code>g_2</code> the next, and so on. Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count. Everything else falls off a cliff. For a 4-hop question, the language model receives one gold chunk out of the four the answer chain requires, and the deepest chunk lands inside K = 10 for zero out of thirty questions.</p>
+<p>Read the table by row. <code>g_1</code> is the gold chunk the retriever ranks highest for a question, <code>g_2</code> the next, and so on. Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count. Everything else falls off a cliff.</p>
+<p>The sharper reading is <em>diagonal</em>. A multi-hop question can only be answered when <em>every</em> gold chunk it needs is inside K, so the effective retrieval quality per hop group is bounded by the deepest slot’s coverage:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Hop count</th>
+<th style="text-align: right;">Effective retrieval at K = 10</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1-hop</td>
+<td style="text-align: right;">100 %</td>
+</tr>
+<tr class="even">
+<td>2-hop</td>
+<td style="text-align: right;">17 %</td>
+</tr>
+<tr class="odd">
+<td>3-hop</td>
+<td style="text-align: right;">0 %</td>
+</tr>
+<tr class="even">
+<td>4-hop</td>
+<td style="text-align: right;">0 %</td>
+</tr>
+</tbody>
+</table>
+<p>Dense retrieval delivers single-hop reliably and multi-hop essentially never at the K the attention curve lets you use. The 1-hop row is inferred from <code>g_1</code>’s 100 % coverage across all hop counts; MuSiQue does not include 1-hop questions, but this is what dense would give you.</p>
 <p>The failure is not that the deep chunks are missing from the corpus. It is that dense retrieval ranks them into the thousands: the 4-hop <code>g_4</code> median rank is <strong>1,796</strong> out of 21,100. Raising K past the K = 30 ceiling does not save it, because a chunk ranked at 1,796 is nowhere near the pool a reranker would even see. This is a ranking gap, not a recall gap, and turning the retriever dial does not close it.</p>
 <p>This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is <em>for</em>. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.</p>
 <p><span class="kicker">On terminology</span></p>

@@ -269,7 +269,36 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
 </tr>
 </tbody>
 </table>
-<p>Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count, and everything else falls off a cliff. For a 4-hop question, the language model gets one gold chunk out of the four the answer chain requires. The deepest chunk lands inside K = 10 for <strong>zero</strong> of thirty questions. The gap is not that the deep chunks are missing from the corpus. They are ranked into the thousands: the deepest 4-hop chunk sits at median rank <strong>1,796</strong> out of 21,100.</p>
+<p>Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count, and everything else falls off a cliff.</p>
+<p>A multi-hop question can only be answered when <em>every</em> gold chunk it needs is inside K, so retrieval quality is bounded by the deepest slot the question requires. Reading the diagonal:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Hop count</th>
+<th style="text-align: right;">Effective retrieval at K = 10</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1-hop</td>
+<td style="text-align: right;">100 %</td>
+</tr>
+<tr class="even">
+<td>2-hop</td>
+<td style="text-align: right;">17 %</td>
+</tr>
+<tr class="odd">
+<td>3-hop</td>
+<td style="text-align: right;">0 %</td>
+</tr>
+<tr class="even">
+<td>4-hop</td>
+<td style="text-align: right;">0 %</td>
+</tr>
+</tbody>
+</table>
+<p>Single-hop retrieval works. Multi-hop retrieval does not work at production K. The 1-hop row is inferred from <code>g_1</code>’s 100 % coverage across all hop counts; MuSiQue does not include 1-hop questions in this set.</p>
+<p>The gap is not that the deep chunks are missing from the corpus. They are ranked into the thousands: the deepest 4-hop chunk sits at median rank <strong>1,796</strong> out of 21,100.</p>
 <p><span class="kicker">Why not raise K?</span></p>
 </section>
 <section id="why-k-30-is-the-ceiling" class="level2">
