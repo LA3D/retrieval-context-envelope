@@ -293,7 +293,7 @@ window.Quarto = {
 <div>
   <div class="abstract">
     <div class="block-title">Abstract</div>
-    <p>Most public writing about retrieval-augmented generation treats retrieval as “find the chunk that answers the question.” This site argues that framing is wrong at scale. What retrieval has to assemble is a <em>context envelope</em>: the local neighborhood of concepts, layout cues, and cross-document evidence around the question. Dense similarity search assembles the envelope well when it fits inside a small top-K. When it does not, the assembly job stops being a retrieval problem and becomes a trajectory problem: a walk over a graph the embedding does not encode.</p>
+    <p>A note for scientists and Scientific AI groups building retrieval systems over their own literature and data. Public writing about retrieval-augmented generation treats retrieval as “find the chunk that answers the question,” with a carve-out for small corpora where one chunk is enough. Scientific work does not fit that carve-out: a claim is <em>supported</em> by evidence, not answered in one chunk, and the supporting chunks are inherently spread across the corpus with provenance chains that cross documents. What retrieval actually has to assemble is a <em>context envelope</em>: the local neighborhood of concepts, layout cues, and cross-document evidence around the question. Dense similarity assembles the envelope well when it fits inside a small top-K. When it does not, the assembly job becomes a trajectory problem: a walk over a graph the embedding does not encode.</p>
   </div>
 </div>
 
