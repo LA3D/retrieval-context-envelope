@@ -41,32 +41,33 @@ The metric is `g_i`: the 1-indexed rank, within the corpus's cosine ranking, of 
 
 Reading the two tables together makes the shape unmistakable. `g_1` sits at rank 1 in both corpora, at every hop count: the chunk that directly matches the question's named entity is trivial for cosine. The deeper gold chunks are the ones that move. On 281 chunks, `g_4` for a 4-hop question sits at median 30, entirely usable. On 21,100 chunks, the same `g_4` sinks to median **1,796** with a p75 of **3,027**. First hop is not the problem. The problem is every gold chunk after the first, scaled against realistic distractors.
 
-### K = 30 coverage on the full 21k
+### Per-hop coverage at production K
 
-`all-gold@K` is the fraction of questions whose *every* gold chunk survives inside the top-K.
+The rank medians turn into a concrete "what does the language model actually see?" table if you count, for each `g_i`, the fraction of questions where that gold chunk lands inside the top K. This is the useful metric. Numbers below are computed directly from `cache/p3v5/vanilla_dense_21k.json`, TEST split, 30 questions per hop group.
 
-| K    | % corpus | all-gold |
-|------|---------:|---------:|
-| 5    |    0.0 % |    3.3 % |
-| 30   |    0.1 % | **22.2 %** |
-| 100  |    0.5 % |   32.2 % |
-| 200  |    0.9 % |   47.8 % |
-| 500  |    2.4 % |   54.4 % |
-| 1000 |    4.7 % |   65.6 % |
-| 2000 |    9.5 % |   76.7 % |
-| 5000 |   23.7 % |   93.3 % |
+| Hop group  | Slot | K = 5 | K = 10 | K = 30 | K = 100 |
+|------------|------|------:|-------:|-------:|--------:|
+| 2-hop      | g1   |  93 % |  100 % |  100 % |   100 % |
+| 2-hop      | g2   |  10 % |   17 % |   43 % |    43 % |
+| 3-hop      | g1   |  93 % |   97 % |  100 % |   100 % |
+| 3-hop      | g2   |  20 % |   37 % |   60 % |    87 % |
+| 3-hop      | g3   |   0 % |    0 % |   23 % |    47 % |
+| 4-hop      | g1   |  83 % |   87 % |   97 % |    97 % |
+| 4-hop      | g2   |  20 % |   23 % |   40 % |    60 % |
+| 4-hop      | g3   |   0 % |    3 % |   13 % |    37 % |
+| 4-hop      | g4   |   0 % |    0 % |    0 % |     7 % |
 
-You would need to feed the language model roughly 2,000 chunks to cover every gold chunk for 77 % of questions. This is what "dense RAG is broken on multi-hop at scale" means as a concrete claim.
+The story reads across the table in two directions. Down each K column: `g_1` always survives, and the coverage of every deeper slot collapses. Along each row from left to right: raising K helps the middle slots but does not touch the tail. **4-hop `g_4` is a zero at K = 30 and only 7 % at K = 100.** That is what "dense at scale cannot rank the deep chunks" means concretely; it is not that they are missing from the corpus, it is that dense sorts them into the thousands.
 
-### What K = 10 looks like
+::: {.aside-note}
+Why not headline `all-gold@K`? Because it is a strict-necessity metric (every gold chunk inside K, else the question is a miss) and it hides where the collapse actually happens. "22 % at K = 30" reads as "the retriever is a bit weak" and quietly gets discounted for "surely the LLM can guess with most of the chunks." The per-hop table above says the same thing without letting the reader off the hook: the deep chunks are *nowhere* inside K.
+:::
 
-`K = 10` is the practical production cutoff once you factor in *lost-in-the-middle* [@liu2023lostmiddle]. The rank medians above translate to K = 10 coverage as follows:
+### Why K = 30 is the useful ceiling
 
-- **2-hop g2**: median 143. Landing inside K = 10 for roughly 10 to 15 % of questions.
-- **3-hop g3**: median 101. Landing inside K = 10 for roughly 5 % of questions.
-- **4-hop g4**: median 1,796. Effectively never inside K = 10.
+*Lost-in-the-middle* [@liu2023lostmiddle] shows a U-shaped attention curve: language models attend well to the start and end of a long context and poorly to the middle. The penalty is measurable across both open-source and commercial models, and it gets worse with longer contexts. K = 30 is roughly the point where the middle-position penalty starts costing more accuracy than the extra recall buys back. Above K = 30 you are trading retriever recall against the model's ability to use what you retrieved.
 
-So at the K the attention curve actually lets you use, dense RAG hands the language model one gold chunk of four for a 4-hop question, and misses the bridge chunk for the vast majority of 2-hop questions. Turning K up past 30 does not fix it, because 30 is where the middle-of-context attention penalty starts eating into answer quality faster than recall improves.
+K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely: every chunk is at a position the model attends to well. The modern pattern is *retrieve K = 50-100 with a cheap dense/BM25 hybrid, then rerank down to K = 5-10 with a cross-encoder*, which lets you use retriever recall without paying the attention penalty. The rerank step helps recover shallow multi-hop chunks (the 2-hop `g_2` in the table above) but cannot recover chunks that are outside the initial K = 100 candidate pool. Look at 4-hop `g_4` (7 % at K = 100) and 4-hop `g_3` (37 % at K = 100). Reranking cannot save what dense retrieval never surfaced.
 
 [Comparison]{.kicker}
 

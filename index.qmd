@@ -53,14 +53,20 @@ This is not a claim about dense retrieval being bad. It is a claim about what de
 
 Two constants set the operating envelope:
 
-- **K = 30** is roughly the ceiling before *lost-in-the-middle* effects [@liu2023lostmiddle] start eating into answer quality. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. Push K above 30 and you gain recall at the cost of the model actually using what you retrieved.
-- **K = 10** is the more common production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the model attends to.
+- **K = 10** is the modal production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the language model actually attends to. This is the number to design against.
+- **K = 30** is the *upper bound*, the point at which *lost-in-the-middle* effects [@liu2023lostmiddle] start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of "just retrieve more."
 
-At **K = 30**, MuSiQue's `all-gold@30` is **22 %** on the 21k corpus. Every gold chunk survives inside the top 30 for one question in five. To hit 77 %, you would have to feed the language model roughly 2,000 chunks per question. That is well past the practical ceiling on any current model.
+What the language model actually sees at K = 10 on the 21k corpus, per hop group (fraction of TEST questions whose slot-`i` gold chunk lands inside the top 10):
 
-At **K = 10**, the picture is sharper. The direct-match chunk is essentially always there. The 2-hop bridge chunk (median rank 143) lands inside K = 10 for maybe 10 to 15 % of questions. The 4-hop deepest chunk (median rank 1,796) effectively never does. Dense retrieval at K = 10 gives the language model one out of four required gold chunks for a 4-hop question, and the model cannot answer without the other three. Turning K up past 30 does not fix it because the attention penalty grows faster than recall improves.
+| Hop group | g1   | g2   | g3   | g4   |
+|-----------|-----:|-----:|-----:|-----:|
+| 2-hop     | 100 %|  17 %|      |      |
+| 3-hop     |  97 %|  37 %|   0 %|      |
+| 4-hop     |  87 %|  23 %|   3 %|   0 %|
 
-The gap is not a coverage bug. It is a ranking gap: the deep chunks are in the corpus, dense retrieval just does not rank them near the top.
+The direct-match chunk is essentially always in front of the model. Everything else drops off a cliff. For a 4-hop question, the model receives `g_1` in 87 % of cases and effectively nothing else; the deepest chunk (`g_4`) lands inside K = 10 for zero out of thirty questions.
+
+Raising to K = 30 recovers some middle chunks but does not touch the tail: 4-hop `g_3` climbs to 13 %, 4-hop `g_4` stays at **0 %**. Even at K = 100, 4-hop `g_4` is only **7 %**. This is the shape that matters. The failure is not a coverage bug you can fix by turning K up. It is a ranking failure: the deep chunks are in the corpus, and dense retrieval sorts them far below the direct-match. See the [data appendix](appendix.qmd) for the full K = 5 / 10 / 30 / 100 sweep.
 
 [On terminology]{.kicker}
 
