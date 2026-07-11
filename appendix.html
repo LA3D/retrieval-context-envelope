@@ -23,6 +23,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 /* CSS for citations */
 div.csl-bib-body { }
 div.csl-entry {
@@ -148,10 +183,18 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
    
   <ul>
   <li><a href="#the-corpus" id="toc-the-corpus" class="nav-link active" data-scroll-target="#the-corpus">The corpus</a></li>
-  <li><a href="#where-do-the-supporting-chunks-land" id="toc-where-do-the-supporting-chunks-land" class="nav-link" data-scroll-target="#where-do-the-supporting-chunks-land">Where do the supporting chunks land?</a></li>
+  <li><a href="#where-do-the-supporting-chunks-land" id="toc-where-do-the-supporting-chunks-land" class="nav-link" data-scroll-target="#where-do-the-supporting-chunks-land">Where do the supporting chunks land?</a>
+  <ul class="collapse">
+  <li><a href="#dense-rag-on-the-full-21100-chunk-corpus" id="toc-dense-rag-on-the-full-21100-chunk-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-full-21100-chunk-corpus">Dense RAG on the full 21,100-chunk corpus</a></li>
+  <li><a href="#dense-rag-on-the-281-chunk-gold-only-corpus" id="toc-dense-rag-on-the-281-chunk-gold-only-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-281-chunk-gold-only-corpus">Dense RAG on the 281-chunk gold-only corpus</a></li>
+  <li><a href="#k-30-coverage-on-the-full-21k" id="toc-k-30-coverage-on-the-full-21k" class="nav-link" data-scroll-target="#k-30-coverage-on-the-full-21k">K = 30 coverage on the full 21k</a></li>
+  <li><a href="#what-k-10-looks-like" id="toc-what-k-10-looks-like" class="nav-link" data-scroll-target="#what-k-10-looks-like">What K = 10 looks like</a></li>
+  </ul></li>
   <li><a href="#gold-only-dense-vs-graph-informed" id="toc-gold-only-dense-vs-graph-informed" class="nav-link" data-scroll-target="#gold-only-dense-vs-graph-informed">Gold-only: dense vs graph-informed</a></li>
+  <li><a href="#the-one-open-comparison" id="toc-the-one-open-comparison" class="nav-link" data-scroll-target="#the-one-open-comparison">The one open comparison</a></li>
   <li><a href="#how-the-graph-is-built" id="toc-how-the-graph-is-built" class="nav-link" data-scroll-target="#how-the-graph-is-built">How the graph is built</a></li>
   <li><a href="#what-we-are-not-claiming" id="toc-what-we-are-not-claiming" class="nav-link" data-scroll-target="#what-we-are-not-claiming">What we are not claiming</a></li>
+  <li><a href="#reproduction" id="toc-reproduction" class="nav-link" data-scroll-target="#reproduction">Reproduction</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/LA3D/retrieval-context-envelope/edit/main/appendix.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/LA3D/retrieval-context-envelope/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -185,126 +228,292 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
 </header>
 
 
-<p>This page is the empirical backing for the <a href="./index.html">landing page</a>. It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. Values marked <em>in progress</em> are pending on runs that have not completed at the time of writing.</p>
+<p>This page is the empirical backing for the <a href="./index.html">landing page</a>. It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. The scaled chain-on-21k comparison is the one open cell; everything else is measured.</p>
 <p><span class="kicker">Setup</span></p>
 <section id="the-corpus" class="level2">
 <h2 class="anchored" data-anchor-id="the-corpus">The corpus</h2>
 <p>The evaluation runs on MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span>, a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the <em>answerable</em> split (2-, 3-, and 4-hop questions with grounded supporting evidence).</p>
 <ul>
-<li><strong>Full corpus</strong>: on the order of 21,000 candidate paragraphs across all questions.</li>
-<li><strong>Gold-only subset</strong>: 281 questions, restricted to the paragraphs that contain the supporting evidence. This isolates the retrieval-ranking problem from the recall problem.</li>
-<li><strong>Held-out test set</strong>: 90 questions used for end-to-end answer quality.</li>
+<li><strong>Full corpus</strong>: 21,100 candidate paragraphs (the union of every question’s supporting passages plus MuSiQue’s distractor pool).</li>
+<li><strong>Gold-only subset</strong>: 281 chunks, restricted to the paragraphs that contain the supporting evidence for the 120-question stratified sample. This isolates the retrieval-ranking problem from the recall problem.</li>
+<li><strong>Held-out test set</strong>: 90 questions, 30 each at 2-, 3-, and 4-hop.</li>
 </ul>
 <p><span class="kicker">Rank distribution</span></p>
 </section>
 <section id="where-do-the-supporting-chunks-land" class="level2">
 <h2 class="anchored" data-anchor-id="where-do-the-supporting-chunks-land">Where do the supporting chunks land?</h2>
-<p>Dense retrieval on the full 21k-chunk corpus produces a rank for every candidate chunk. For each MuSiQue question, we can ask: what rank does the model assign to the chunk that supports the <em>n</em>-th reasoning hop?</p>
-<p>The table below is the shape of that finding. First-hop supporting chunks are usually retrievable at production-scale K. Deeper hops drift toward the tail of the distribution.</p>
+<p>The metric is <code>g_i</code>: the 1-indexed rank, within the corpus’s cosine ranking, of the <em>i-th-closest gold chunk</em> for a question. <code>g_1</code> is the gold chunk the retriever ranks highest; <code>g_4</code> is the deepest of a 4-hop question’s four gold chunks. Cells report <code>median [p75] (max)</code> over 30 questions.</p>
+<section id="dense-rag-on-the-full-21100-chunk-corpus" class="level3">
+<h3 class="anchored" data-anchor-id="dense-rag-on-the-full-21100-chunk-corpus">Dense RAG on the full 21,100-chunk corpus</h3>
 <table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 17%">
+<col style="width: 17%">
+<col style="width: 17%">
+<col style="width: 17%">
+</colgroup>
 <thead>
 <tr class="header">
-<th>Hop</th>
-<th style="text-align: right;">Mean rank of supporting chunk</th>
-<th style="text-align: right;">Within K = 10</th>
-<th style="text-align: right;">Within K = 30</th>
+<th>hops</th>
+<th>g1</th>
+<th>g2</th>
+<th>g3</th>
+<th>g4</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>1</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>2-hop</td>
+<td>1 [2] (8)</td>
+<td><strong>143</strong> [786] (5042)</td>
+<td></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>2</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>3-hop</td>
+<td>1 [2] (16)</td>
+<td>13 [47] (1138)</td>
+<td><strong>101</strong> [522] (5775)</td>
+<td></td>
 </tr>
 <tr class="odd">
-<td>3</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
-</tr>
-<tr class="even">
-<td>4</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>4-hop</td>
+<td>1 [3] (129)</td>
+<td>45 [182] (1388)</td>
+<td>268 [1049] (2394)</td>
+<td><strong>1796</strong> [3027] (9572)</td>
 </tr>
 </tbody>
 </table>
-<div class="aside-note">
-<p>Numbers are being validated on the full 21k corpus at the time of writing. The qualitative shape (rank rising monotonically with hop depth, most 3rd- and 4th-hop chunks outside K = 30) is stable across pilot runs. Point estimates are refreshed here as final runs complete.</p>
-</div>
-<p>The value of the table is not any single point estimate. It is the pattern: a common production cutoff of K = 10 does not include the supporting evidence for most reasoning-hop-3 and reasoning-hop-4 chunks. Even K = 30, near the <em>lost-in-the-middle</em> ceiling <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span>, does not close the gap.</p>
+</section>
+<section id="dense-rag-on-the-281-chunk-gold-only-corpus" class="level3">
+<h3 class="anchored" data-anchor-id="dense-rag-on-the-281-chunk-gold-only-corpus">Dense RAG on the 281-chunk gold-only corpus</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>hops</th>
+<th>g1</th>
+<th>g2</th>
+<th>g3</th>
+<th>g4</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>2-hop</td>
+<td>1 [1] (1)</td>
+<td>3 [17] (79)</td>
+<td></td>
+<td></td>
+</tr>
+<tr class="even">
+<td>3-hop</td>
+<td>1 [1] (1)</td>
+<td>2 [3] (15)</td>
+<td>5 [12] (77)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>4-hop</td>
+<td>1 [1] (3)</td>
+<td>3 [5] (37)</td>
+<td>7 [21] (45)</td>
+<td>30 [65] (144)</td>
+</tr>
+</tbody>
+</table>
+<p>Reading the two tables together makes the shape unmistakable. <code>g_1</code> sits at rank 1 in both corpora, at every hop count: the chunk that directly matches the question’s named entity is trivial for cosine. The deeper gold chunks are the ones that move. On 281 chunks, <code>g_4</code> for a 4-hop question sits at median 30, entirely usable. On 21,100 chunks, the same <code>g_4</code> sinks to median <strong>1,796</strong> with a p75 of <strong>3,027</strong>. First hop is not the problem. The problem is every gold chunk after the first, scaled against realistic distractors.</p>
+</section>
+<section id="k-30-coverage-on-the-full-21k" class="level3">
+<h3 class="anchored" data-anchor-id="k-30-coverage-on-the-full-21k">K = 30 coverage on the full 21k</h3>
+<p><code>all-gold@K</code> is the fraction of questions whose <em>every</em> gold chunk survives inside the top-K.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>K</th>
+<th style="text-align: right;">% corpus</th>
+<th style="text-align: right;">all-gold</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>5</td>
+<td style="text-align: right;">0.0 %</td>
+<td style="text-align: right;">3.3 %</td>
+</tr>
+<tr class="even">
+<td>30</td>
+<td style="text-align: right;">0.1 %</td>
+<td style="text-align: right;"><strong>22.2 %</strong></td>
+</tr>
+<tr class="odd">
+<td>100</td>
+<td style="text-align: right;">0.5 %</td>
+<td style="text-align: right;">32.2 %</td>
+</tr>
+<tr class="even">
+<td>200</td>
+<td style="text-align: right;">0.9 %</td>
+<td style="text-align: right;">47.8 %</td>
+</tr>
+<tr class="odd">
+<td>500</td>
+<td style="text-align: right;">2.4 %</td>
+<td style="text-align: right;">54.4 %</td>
+</tr>
+<tr class="even">
+<td>1000</td>
+<td style="text-align: right;">4.7 %</td>
+<td style="text-align: right;">65.6 %</td>
+</tr>
+<tr class="odd">
+<td>2000</td>
+<td style="text-align: right;">9.5 %</td>
+<td style="text-align: right;">76.7 %</td>
+</tr>
+<tr class="even">
+<td>5000</td>
+<td style="text-align: right;">23.7 %</td>
+<td style="text-align: right;">93.3 %</td>
+</tr>
+</tbody>
+</table>
+<p>You would need to feed the language model roughly 2,000 chunks to cover every gold chunk for 77 % of questions. This is what “dense RAG is broken on multi-hop at scale” means as a concrete claim.</p>
+</section>
+<section id="what-k-10-looks-like" class="level3">
+<h3 class="anchored" data-anchor-id="what-k-10-looks-like">What K = 10 looks like</h3>
+<p><code>K = 10</code> is the practical production cutoff once you factor in <em>lost-in-the-middle</em> <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span>. The rank medians above translate to K = 10 coverage as follows:</p>
+<ul>
+<li><strong>2-hop g2</strong>: median 143. Landing inside K = 10 for roughly 10 to 15 % of questions.</li>
+<li><strong>3-hop g3</strong>: median 101. Landing inside K = 10 for roughly 5 % of questions.</li>
+<li><strong>4-hop g4</strong>: median 1,796. Effectively never inside K = 10.</li>
+</ul>
+<p>So at the K the attention curve actually lets you use, dense RAG hands the language model one gold chunk of four for a 4-hop question, and misses the bridge chunk for the vast majority of 2-hop questions. Turning K up past 30 does not fix it, because 30 is where the middle-of-context attention penalty starts eating into answer quality faster than recall improves.</p>
 <p><span class="kicker">Comparison</span></p>
+</section>
 </section>
 <section id="gold-only-dense-vs-graph-informed" class="level2">
 <h2 class="anchored" data-anchor-id="gold-only-dense-vs-graph-informed">Gold-only: dense vs graph-informed</h2>
-<p>The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same paragraphs; the only difference is how they rank them.</p>
+<p>The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same 281 paragraphs; the only difference is how they rank them.</p>
 <ul>
-<li><strong>Dense</strong>: cosine similarity between question embedding and paragraph embeddings, single-shot.</li>
-<li><strong>Graph-informed</strong>: RWR-based re-ranking against a graph built from the corpus. Nodes are chunks, concepts, and documents; edges come from co-occurring concepts, document layout, and (where present) cross-document links. Restart probability and edge weights are tuned on a development split.</li>
+<li><strong>Dense</strong>: cosine similarity between question embedding and paragraph embeddings (mpnet, L2-normalized), single-shot.</li>
+<li><strong>Chain v5c2</strong>: bipartite chunk-entity graph with structural occurrence-count edges (no chunk-chunk, no entity-entity). Random walk with restart, <code>c = 0.15</code>, <code>alpha = 0.5</code>, two-channel softmax seeding on question-chunk-text and question-entity-label.</li>
 </ul>
 <table class="caption-top table">
+<colgroup>
+<col style="width: 8%">
+<col style="width: 9%">
+<col style="width: 12%">
+<col style="width: 21%">
+<col style="width: 20%">
+<col style="width: 27%">
+</colgroup>
 <thead>
 <tr class="header">
-<th>Metric</th>
-<th style="text-align: right;">Dense</th>
-<th style="text-align: right;">Graph-informed</th>
+<th>hops</th>
+<th>metric</th>
+<th>g1</th>
+<th>g2</th>
+<th>g3</th>
+<th>g4</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>Answer accuracy (gold-only)</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>2-hop</td>
+<td>dense</td>
+<td>1 [1] (1)</td>
+<td>3 <strong>[17]</strong> (79)</td>
+<td></td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Mean rank of hop-2 support</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>2-hop</td>
+<td>chain</td>
+<td>1 [1] (1)</td>
+<td>2 <strong>[3]</strong> (54)</td>
+<td></td>
+<td></td>
 </tr>
 <tr class="odd">
-<td>Mean rank of hop-3 support</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>3-hop</td>
+<td>dense</td>
+<td>1 [1] (1)</td>
+<td>2 [3] (15)</td>
+<td>5 [12] (77)</td>
+<td></td>
 </tr>
 <tr class="even">
-<td>Mean rank of hop-4 support</td>
-<td style="text-align: right;"><em>in progress</em></td>
-<td style="text-align: right;"><em>in progress</em></td>
+<td>3-hop</td>
+<td>chain</td>
+<td>1 [1] (2)</td>
+<td>2 [2] (24)</td>
+<td>4 [5] (71)</td>
+<td></td>
+</tr>
+<tr class="odd">
+<td>4-hop</td>
+<td>dense</td>
+<td>1 [1] (3)</td>
+<td>3 [5] (37)</td>
+<td>7 [21] (45)</td>
+<td>30 <strong>[65]</strong> (144)</td>
+</tr>
+<tr class="even">
+<td>4-hop</td>
+<td>chain</td>
+<td>1 [1] (3)</td>
+<td>2 [3] (33)</td>
+<td>5 [12] (77)</td>
+<td>19 <strong>[29]</strong> (206)</td>
 </tr>
 </tbody>
 </table>
-<p>The gold-only comparison is intentionally the easier setting. It shows what retrieval strategy is doing to the <em>ranking of evidence that is guaranteed to be present</em>. Full-corpus results are the harder setting, and the ones being validated now.</p>
+<p>Three things fall out of this table:</p>
+<ul>
+<li><strong><code>g_1</code> is a tie.</strong> Dense cosine trivially finds the seed chunk; the walk adds nothing on the first hop, because the first hop is not the problem.</li>
+<li><strong>The chain wins on bridge chunks, more so the deeper the hop.</strong> 2-hop <code>g_2</code> p75 drops from <strong>17</strong> to <strong>3</strong>. 4-hop <code>g_4</code> p75 drops from <strong>65</strong> to <strong>29</strong>. The chunks that dense retrieval buries because they do not lexically match the question are the chunks the entity-bridge walk keeps near the top.</li>
+<li><strong>One reversal.</strong> The chain’s worst-case 4-hop <code>g_4</code> (max 206) is worse than dense’s (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury a single chunk worse than dense does. This is a known failure mode of RWR, not a metric artifact.</li>
+</ul>
+<p>The chain’s advantage concentrates on the deepest hop, which is exactly where the <em>trajectory-length argument</em> predicts it should: the walk’s reach scales with <code>(1 - c) / c</code>, and a low restart probability sends mass further into the graph.</p>
+<p><span class="kicker">Open</span></p>
+</section>
+<section id="the-one-open-comparison" class="level2">
+<h2 class="anchored" data-anchor-id="the-one-open-comparison">The one open comparison</h2>
+<p>The 21k-scale chain-vs-dense comparison is the still-open cell. Dense RAG on 21k is the collapsed baseline (<code>g_4</code> median 1,796, <code>all-gold@30</code> 22 %). The chain has been run on the 281 gold-only corpus (<code>g_4</code> median 19). The chain on the full 21k corpus is deferred, blocked on a distillation step estimated at roughly $300 in compute. The numbers here will be updated as soon as that run lands.</p>
+<p>The prediction to falsify: at 21k, the chain keeps every <code>g_i</code> inside K = 30, closing the <code>all-gold@30</code> gap from 22 % well into the 60s or higher. If it does not, the operator-splitting story on the <a href="./index.html">landing page</a> needs an accounting.</p>
 <p><span class="kicker">Methodology</span></p>
 </section>
 <section id="how-the-graph-is-built" class="level2">
 <h2 class="anchored" data-anchor-id="how-the-graph-is-built">How the graph is built</h2>
-<p>For MuSiQue, no wiki was written by hand. The graph is extracted from the corpus:</p>
+<p>Chain v5c2 uses a bipartite chunk-entity graph. Concretely:</p>
 <ol type="1">
-<li><strong>Concept extraction</strong>: entity recognition over each paragraph, keeping named entities and top-<em>k</em> keyphrases per paragraph.</li>
-<li><strong>Concept-concept edges</strong>: co-occurrence within a paragraph, weighted by pointwise mutual information across the corpus.</li>
-<li><strong>Chunk-concept edges</strong>: each paragraph is a chunk; edges connect the chunk to every extracted concept in it.</li>
-<li><strong>Document-chunk edges</strong>: paragraphs from the same source document are linked to a shared document node.</li>
+<li><strong>Entity extraction</strong> over each paragraph, producing a canonical entity label per mention.</li>
+<li><strong>Chunk-entity edges</strong> weighted by the count of the entity’s occurrences inside the chunk. No chunk-chunk edges. No entity-entity edges.</li>
+<li><strong>Two transition temperatures</strong> at the walk step: <code>T_entity = 0.05</code> when transitioning from entity to chunk, <code>T_chunk = 0.05</code> when transitioning from chunk to entity. Both act as softmax sharpness.</li>
+<li><strong>Two-channel seeding</strong> at query time: the question is embedded and softmaxed against chunk texts and entity labels separately, then the two seed distributions are mixed with <code>alpha = 0.5</code>.</li>
 </ol>
-<p>The walk operates on the resulting tripartite graph.</p>
-<p>For projects that already ship linked notes (a wiki with <code>[[link]]</code> syntax and typed frontmatter), steps 1 to 3 are unnecessary: the concept graph is the wiki graph. This is the setting where the approach is cheapest.</p>
+<p>The walk is a personalized PageRank with restart <code>c = 0.15</code>. Full ranking over all corpus chunks is read off the stationary distribution; no top-K cutoff is applied at ranking time.</p>
+<p>For projects that already ship linked notes (a wiki with <code>[[link]]</code> syntax and typed frontmatter), the entity layer is unnecessary because the concept graph is the wiki graph itself. This is the setting where the approach is cheapest to deploy.</p>
 <p><span class="kicker">Caveats</span></p>
 </section>
 <section id="what-we-are-not-claiming" class="level2">
 <h2 class="anchored" data-anchor-id="what-we-are-not-claiming">What we are not claiming</h2>
 <ul>
-<li><strong>This does not replace dense retrieval.</strong> Dense similarity is what seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops that dense-alone misses.</li>
-<li><strong>This has not been evaluated on all corpora.</strong> MuSiQue is a stress test built for multi-hop; results there do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.</li>
-<li><strong>Full-scale accuracy numbers are pending.</strong> The rank-distribution collapse on the 21k-chunk full corpus is observed. The end-to-end answer accuracy of graph-informed retrieval at full scale is being validated at time of writing.</li>
+<li><strong>This does not replace dense retrieval.</strong> Dense similarity seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops dense-alone misses.</li>
+<li><strong>The 21k chain result is not in yet.</strong> The 21k dense collapse is measured; the 21k chain result is projected, not observed. Do not cite the chain at scale until the deferred run completes.</li>
+<li><strong>This has not been evaluated on all corpora.</strong> MuSiQue is a stress test built for multi-hop; results here do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.</li>
 <li><strong>GraphRAG and community-based methods are related.</strong> <span class="citation" data-cites="edge2024graphrag">(<a href="#ref-edge2024graphrag" role="doc-biblioref">Edge et al., 2024</a>)</span> Hierarchical community summaries are a different way to solve the same envelope-assembly problem. Which method wins depends on corpus structure; both beat plain dense at scale.</li>
 </ul>
+</section>
+<section id="reproduction" class="level2 unnumbered">
+<h2 class="unnumbered anchored" data-anchor-id="reproduction">Reproduction</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Dense RAG rank positions on the 21k corpus</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> experiments.musique.sparql.design.vanilla_dense_positions <span class="at">--scope</span> full</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Chain v5c2 rank positions on the 281 gold-only corpus</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> experiments.musique.chain_v5c2_rank_analysis</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="references" class="level2 unnumbered">
 <h2 class="unnumbered anchored" data-anchor-id="references">References</h2>

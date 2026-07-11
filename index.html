@@ -183,7 +183,7 @@ window.Quarto = {
   <ul>
   <li><a href="#dense-rag-at-scale" id="toc-dense-rag-at-scale" class="nav-link active" data-scroll-target="#dense-rag-at-scale">Dense RAG at scale</a>
   <ul class="collapse">
-  <li><a href="#the-k-question" id="toc-the-k-question" class="nav-link" data-scroll-target="#the-k-question">The K question</a></li>
+  <li><a href="#the-k-question-sharpens-this" id="toc-the-k-question-sharpens-this" class="nav-link" data-scroll-target="#the-k-question-sharpens-this">The K question sharpens this</a></li>
   </ul></li>
   <li><a href="#two-kinds-of-hop" id="toc-two-kinds-of-hop" class="nav-link" data-scroll-target="#two-kinds-of-hop">Two kinds of “hop”</a></li>
   <li><a href="#retrieval-as-a-trajectory" id="toc-retrieval-as-a-trajectory" class="nav-link" data-scroll-target="#retrieval-as-a-trajectory">Retrieval as a trajectory</a>
@@ -280,16 +280,60 @@ window.Quarto = {
 <section id="dense-rag-at-scale" class="level2">
 <h2 class="anchored" data-anchor-id="dense-rag-at-scale">Dense RAG at scale</h2>
 <p>Dense retrieval on a modest corpus, of order a thousand chunks, and a question that needs one chunk to answer, is very good. It is the case most public benchmarks are built around, and it is the case the “just do RAG” advice was written for.</p>
-<p>Multi-hop QA at scale is a different problem. MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span> provides a stress test: about 21,000 candidate chunks, questions that require chaining evidence across two, three, or four documents, and a rank distribution that gets qualitatively worse the further along the chain you go. First-hop chunks are usually retrievable at reasonable K. Second-hop chunks are less so. By the fourth hop, dense similarity is essentially ranking chunks the way it would rank random documents from the corpus.</p>
+<p>Multi-hop QA at scale is a different problem. MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span> provides a stress test: 21,100 candidate paragraphs, questions that require chaining evidence across two, three, or four documents, and a rank distribution that collapses hop by hop. Concretely, on the MuSiQue TEST set with plain dense retrieval, the <em>rank</em> of each gold chunk:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 26%">
+<col style="width: 18%">
+<col style="width: 19%">
+<col style="width: 19%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Hop group</th>
+<th style="text-align: right;">Direct-match chunk</th>
+<th style="text-align: right;">Bridge chunk</th>
+<th style="text-align: right;">Deeper bridge</th>
+<th style="text-align: right;">Deepest chunk</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>2-hop</td>
+<td style="text-align: right;">median rank <strong>1</strong></td>
+<td style="text-align: right;"><strong>143</strong></td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>3-hop</td>
+<td style="text-align: right;"><strong>1</strong></td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;"><strong>101</strong></td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="odd">
+<td>4-hop</td>
+<td style="text-align: right;"><strong>1</strong></td>
+<td style="text-align: right;">45</td>
+<td style="text-align: right;">268</td>
+<td style="text-align: right;"><strong>1,796</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The direct-match chunk lands at rank 1 at every hop count, even against 21,000 distractors. Cosine similarity finds it every time. Every chunk after that scatters. The deepest chunk of a 4-hop question sits at median <strong>rank 1,796</strong>, p75 3,027, worst case 9,572. Dense retrieval on this corpus is not returning noise; it is returning the <em>wrong specific evidence</em>, which is worse.</p>
 <p>This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is <em>for</em>. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.</p>
-<section id="the-k-question" class="level3">
-<h3 class="anchored" data-anchor-id="the-k-question">The K question</h3>
+<section id="the-k-question-sharpens-this" class="level3">
+<h3 class="anchored" data-anchor-id="the-k-question-sharpens-this">The K question sharpens this</h3>
 <p>Two constants set the operating envelope:</p>
 <ul>
 <li><strong>K = 30</strong> is roughly the ceiling before <em>lost-in-the-middle</em> effects <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> start eating into answer quality. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. Push K above 30 and you gain recall at the cost of the model actually using what you retrieved.</li>
 <li><strong>K = 10</strong> is the more common production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the model attends to.</li>
 </ul>
-<p>Neither cutoff is generous enough for a corpus of tens of thousands of chunks with multi-hop questions. Not because the retrieval is bad; because the <em>envelope</em> the model needs is spread across more chunks than K can hold.</p>
+<p>At <strong>K = 30</strong>, MuSiQue’s <code>all-gold@30</code> is <strong>22 %</strong> on the 21k corpus. Every gold chunk survives inside the top 30 for one question in five. To hit 77 %, you would have to feed the language model roughly 2,000 chunks per question. That is well past the practical ceiling on any current model.</p>
+<p>At <strong>K = 10</strong>, the picture is sharper. The direct-match chunk is essentially always there. The 2-hop bridge chunk (median rank 143) lands inside K = 10 for maybe 10 to 15 % of questions. The 4-hop deepest chunk (median rank 1,796) effectively never does. Dense retrieval at K = 10 gives the language model one out of four required gold chunks for a 4-hop question, and the model cannot answer without the other three. Turning K up past 30 does not fix it because the attention penalty grows faster than recall improves.</p>
+<p>The gap is not a coverage bug. It is a ranking gap: the deep chunks are in the corpus, dense retrieval just does not rank them near the top.</p>
 <p><span class="kicker">On terminology</span></p>
 </section>
 </section>
@@ -307,7 +351,7 @@ window.Quarto = {
 </section>
 <section id="retrieval-as-a-trajectory" class="level2">
 <h2 class="anchored" data-anchor-id="retrieval-as-a-trajectory">Retrieval as a trajectory</h2>
-<p>The alternative to “one query, top-K by similarity” is “walk the graph.” Chunks, concepts, and documents are nodes. Edges come cheaply: concept-concept links from a wiki or from term co-occurrence, chunk-concept from typed frontmatter or entity extraction, document-chunk from layout parsing. Once the graph exists, a <strong>random walk with restart</strong> gives you a stationary distribution that captures where information <em>tends to cluster</em>:</p>
+<p>The alternative to “one query, top-K by similarity” is “walk the graph.” The graph used in the results below is deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a <strong>random walk with restart</strong> gives you a stationary distribution that captures where information <em>tends to cluster</em>:</p>
 <p><span class="math display">\[
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
 \]</span></p>
@@ -334,12 +378,13 @@ window.Quarto = {
 </section>
 <section id="what-this-buys-you" class="level2">
 <h2 class="anchored" data-anchor-id="what-this-buys-you">What this buys you</h2>
-<p>On MuSiQue, using a wiki-style graph built from the corpus itself, the walk-informed neighborhood catches supporting evidence that dense similarity misses on the second, third, and fourth hop. See the <a href="./appendix.html">data appendix</a> for the rank tables.</p>
+<p>On the 281-chunk gold-only subset, the chain closes the ranking gap on exactly the chunks dense retrieval buries. <code>g_1</code> is a tie at rank 1 for both retrievers, as it should be. The 2-hop bridge chunk (<code>g_2</code>) drops from a dense p75 of <strong>17</strong> to a chain p75 of <strong>3</strong>. The 4-hop deepest chunk (<code>g_4</code>) drops from a dense p75 of <strong>65</strong> to a chain p75 of <strong>29</strong>. Full tables and the metric definition are in the <a href="./appendix.html">data appendix</a>.</p>
 <p>The honest caveats:</p>
 <ul>
-<li>The strongest evidence to date is on the <em>gold-only</em> subset: questions where the supporting evidence is known to be present in the corpus. This isolates the retrieval problem from the recall problem.</li>
-<li>Full-scale evaluation on the 21,000-chunk corpus is in progress at the time of writing. The rank-distribution collapse we see with dense retrieval at that scale is real; the exact numbers for graph-informed retrieval at the same scale are still being validated. Values published here are updated as runs complete.</li>
-<li>Graph construction is not free. If the corpus does not come with links, they have to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing; extracted graphs from raw PDFs cost more.</li>
+<li>The strongest evidence right now is on the <em>gold-only</em> subset, where every gold chunk is guaranteed to be present in the corpus. This isolates the retrieval-<em>ranking</em> problem from the recall problem, and is where the chain has been fully evaluated.</li>
+<li><strong>The 21k-scale chain-vs-dense comparison is not run yet.</strong> The dense side is measured (<code>g_4</code> median 1,796). The chain at scale is deferred, blocked on a ~$300 distillation step. The 21k number in this section will change from projection to measurement as that run lands. Do not cite the chain at scale until then.</li>
+<li>One reversal: the chain’s worst-case 4-hop <code>g_4</code> (max 206) is worse than dense’s (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury one worse than dense would. This is a known RWR failure mode, not a metric artifact.</li>
+<li>Graph construction is not free. If the corpus does not come with links, an entity layer has to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing.</li>
 </ul>
 <p><span class="kicker">Deeper</span></p>
 </section>
