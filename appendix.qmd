@@ -5,7 +5,7 @@ date-modified: "2026-07-11"
 date-format: "MMMM D, YYYY"
 ---
 
-This page is the empirical backing for the [landing page](index.qmd). It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. Values marked *in progress* are pending on runs that have not completed at the time of writing.
+This page is the empirical backing for the [landing page](index.qmd). It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. The scaled chain-on-21k comparison is the one open cell; everything else is measured.
 
 [Setup]{.kicker}
 
@@ -13,72 +13,128 @@ This page is the empirical backing for the [landing page](index.qmd). It is vers
 
 The evaluation runs on MuSiQue [@trivedi2022musique], a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the *answerable* split (2-, 3-, and 4-hop questions with grounded supporting evidence).
 
-- **Full corpus**: on the order of 21,000 candidate paragraphs across all questions.
-- **Gold-only subset**: 281 questions, restricted to the paragraphs that contain the supporting evidence. This isolates the retrieval-ranking problem from the recall problem.
-- **Held-out test set**: 90 questions used for end-to-end answer quality.
+- **Full corpus**: 21,100 candidate paragraphs (the union of every question's supporting passages plus MuSiQue's distractor pool).
+- **Gold-only subset**: 281 chunks, restricted to the paragraphs that contain the supporting evidence for the 120-question stratified sample. This isolates the retrieval-ranking problem from the recall problem.
+- **Held-out test set**: 90 questions, 30 each at 2-, 3-, and 4-hop.
 
 [Rank distribution]{.kicker}
 
 ## Where do the supporting chunks land?
 
-Dense retrieval on the full 21k-chunk corpus produces a rank for every candidate chunk. For each MuSiQue question, we can ask: what rank does the model assign to the chunk that supports the *n*-th reasoning hop?
+The metric is `g_i`: the 1-indexed rank, within the corpus's cosine ranking, of the *i-th-closest gold chunk* for a question. `g_1` is the gold chunk the retriever ranks highest; `g_4` is the deepest of a 4-hop question's four gold chunks. Cells report `median [p75] (max)` over 30 questions.
 
-The table below is the shape of that finding. First-hop supporting chunks are usually retrievable at production-scale K. Deeper hops drift toward the tail of the distribution.
+### Dense RAG on the full 21,100-chunk corpus
 
-| Hop | Mean rank of supporting chunk | Within K = 10 | Within K = 30 |
-|-----|------------------------------:|--------------:|--------------:|
-| 1   | *in progress* | *in progress* | *in progress* |
-| 2   | *in progress* | *in progress* | *in progress* |
-| 3   | *in progress* | *in progress* | *in progress* |
-| 4   | *in progress* | *in progress* | *in progress* |
+| hops  | g1 | g2 | g3 | g4 |
+|-------|----|----|----|----|
+| 2-hop | 1 [2] (8)   | **143** [786] (5042)   |                        |                          |
+| 3-hop | 1 [2] (16)  | 13 [47] (1138)         | **101** [522] (5775)   |                          |
+| 4-hop | 1 [3] (129) | 45 [182] (1388)        | 268 [1049] (2394)      | **1796** [3027] (9572)   |
 
-::: {.aside-note}
-Numbers are being validated on the full 21k corpus at the time of writing. The qualitative shape (rank rising monotonically with hop depth, most 3rd- and 4th-hop chunks outside K = 30) is stable across pilot runs. Point estimates are refreshed here as final runs complete.
-:::
+### Dense RAG on the 281-chunk gold-only corpus
 
-The value of the table is not any single point estimate. It is the pattern: a common production cutoff of K = 10 does not include the supporting evidence for most reasoning-hop-3 and reasoning-hop-4 chunks. Even K = 30, near the *lost-in-the-middle* ceiling [@liu2023lostmiddle], does not close the gap.
+| hops  | g1 | g2 | g3 | g4 |
+|-------|----|----|----|----|
+| 2-hop | 1 [1] (1) | 3 [17] (79)  |              |               |
+| 3-hop | 1 [1] (1) | 2 [3] (15)   | 5 [12] (77)  |               |
+| 4-hop | 1 [1] (3) | 3 [5] (37)   | 7 [21] (45)  | 30 [65] (144) |
+
+Reading the two tables together makes the shape unmistakable. `g_1` sits at rank 1 in both corpora, at every hop count: the chunk that directly matches the question's named entity is trivial for cosine. The deeper gold chunks are the ones that move. On 281 chunks, `g_4` for a 4-hop question sits at median 30, entirely usable. On 21,100 chunks, the same `g_4` sinks to median **1,796** with a p75 of **3,027**. First hop is not the problem. The problem is every gold chunk after the first, scaled against realistic distractors.
+
+### K = 30 coverage on the full 21k
+
+`all-gold@K` is the fraction of questions whose *every* gold chunk survives inside the top-K.
+
+| K    | % corpus | all-gold |
+|------|---------:|---------:|
+| 5    |    0.0 % |    3.3 % |
+| 30   |    0.1 % | **22.2 %** |
+| 100  |    0.5 % |   32.2 % |
+| 200  |    0.9 % |   47.8 % |
+| 500  |    2.4 % |   54.4 % |
+| 1000 |    4.7 % |   65.6 % |
+| 2000 |    9.5 % |   76.7 % |
+| 5000 |   23.7 % |   93.3 % |
+
+You would need to feed the language model roughly 2,000 chunks to cover every gold chunk for 77 % of questions. This is what "dense RAG is broken on multi-hop at scale" means as a concrete claim.
+
+### What K = 10 looks like
+
+`K = 10` is the practical production cutoff once you factor in *lost-in-the-middle* [@liu2023lostmiddle]. The rank medians above translate to K = 10 coverage as follows:
+
+- **2-hop g2**: median 143. Landing inside K = 10 for roughly 10 to 15 % of questions.
+- **3-hop g3**: median 101. Landing inside K = 10 for roughly 5 % of questions.
+- **4-hop g4**: median 1,796. Effectively never inside K = 10.
+
+So at the K the attention curve actually lets you use, dense RAG hands the language model one gold chunk of four for a 4-hop question, and misses the bridge chunk for the vast majority of 2-hop questions. Turning K up past 30 does not fix it, because 30 is where the middle-of-context attention penalty starts eating into answer quality faster than recall improves.
 
 [Comparison]{.kicker}
 
 ## Gold-only: dense vs graph-informed
 
-The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same paragraphs; the only difference is how they rank them.
+The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same 281 paragraphs; the only difference is how they rank them.
 
-- **Dense**: cosine similarity between question embedding and paragraph embeddings, single-shot.
-- **Graph-informed**: RWR-based re-ranking against a graph built from the corpus. Nodes are chunks, concepts, and documents; edges come from co-occurring concepts, document layout, and (where present) cross-document links. Restart probability and edge weights are tuned on a development split.
+- **Dense**: cosine similarity between question embedding and paragraph embeddings (mpnet, L2-normalized), single-shot.
+- **Chain v5c2**: bipartite chunk-entity graph with structural occurrence-count edges (no chunk-chunk, no entity-entity). Random walk with restart, `c = 0.15`, `alpha = 0.5`, two-channel softmax seeding on question-chunk-text and question-entity-label.
 
-| Metric | Dense | Graph-informed |
-|--------|------:|---------------:|
-| Answer accuracy (gold-only) | *in progress* | *in progress* |
-| Mean rank of hop-2 support | *in progress* | *in progress* |
-| Mean rank of hop-3 support | *in progress* | *in progress* |
-| Mean rank of hop-4 support | *in progress* | *in progress* |
+| hops  | metric | g1        | g2                | g3               | g4                    |
+|-------|--------|-----------|-------------------|------------------|------------------------|
+| 2-hop | dense  | 1 [1] (1) | 3 **[17]** (79)   |                  |                       |
+| 2-hop | chain  | 1 [1] (1) | 2 **[3]** (54)    |                  |                       |
+| 3-hop | dense  | 1 [1] (1) | 2 [3] (15)        | 5 [12] (77)      |                       |
+| 3-hop | chain  | 1 [1] (2) | 2 [2] (24)        | 4 [5] (71)       |                       |
+| 4-hop | dense  | 1 [1] (3) | 3 [5] (37)        | 7 [21] (45)      | 30 **[65]** (144)     |
+| 4-hop | chain  | 1 [1] (3) | 2 [3] (33)        | 5 [12] (77)      | 19 **[29]** (206)     |
 
-The gold-only comparison is intentionally the easier setting. It shows what retrieval strategy is doing to the *ranking of evidence that is guaranteed to be present*. Full-corpus results are the harder setting, and the ones being validated now.
+Three things fall out of this table:
+
+- **`g_1` is a tie.** Dense cosine trivially finds the seed chunk; the walk adds nothing on the first hop, because the first hop is not the problem.
+- **The chain wins on bridge chunks, more so the deeper the hop.** 2-hop `g_2` p75 drops from **17** to **3**. 4-hop `g_4` p75 drops from **65** to **29**. The chunks that dense retrieval buries because they do not lexically match the question are the chunks the entity-bridge walk keeps near the top.
+- **One reversal.** The chain's worst-case 4-hop `g_4` (max 206) is worse than dense's (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury a single chunk worse than dense does. This is a known failure mode of RWR, not a metric artifact.
+
+The chain's advantage concentrates on the deepest hop, which is exactly where the *trajectory-length argument* predicts it should: the walk's reach scales with `(1 - c) / c`, and a low restart probability sends mass further into the graph.
+
+[Open]{.kicker}
+
+## The one open comparison
+
+The 21k-scale chain-vs-dense comparison is the still-open cell. Dense RAG on 21k is the collapsed baseline (`g_4` median 1,796, `all-gold@30` 22 %). The chain has been run on the 281 gold-only corpus (`g_4` median 19). The chain on the full 21k corpus is deferred, blocked on a distillation step estimated at roughly \$300 in compute. The numbers here will be updated as soon as that run lands.
+
+The prediction to falsify: at 21k, the chain keeps every `g_i` inside K = 30, closing the `all-gold@30` gap from 22 % well into the 60s or higher. If it does not, the operator-splitting story on the [landing page](index.qmd) needs an accounting.
 
 [Methodology]{.kicker}
 
 ## How the graph is built
 
-For MuSiQue, no wiki was written by hand. The graph is extracted from the corpus:
+Chain v5c2 uses a bipartite chunk-entity graph. Concretely:
 
-1. **Concept extraction**: entity recognition over each paragraph, keeping named entities and top-*k* keyphrases per paragraph.
-2. **Concept-concept edges**: co-occurrence within a paragraph, weighted by pointwise mutual information across the corpus.
-3. **Chunk-concept edges**: each paragraph is a chunk; edges connect the chunk to every extracted concept in it.
-4. **Document-chunk edges**: paragraphs from the same source document are linked to a shared document node.
+1. **Entity extraction** over each paragraph, producing a canonical entity label per mention.
+2. **Chunk-entity edges** weighted by the count of the entity's occurrences inside the chunk. No chunk-chunk edges. No entity-entity edges.
+3. **Two transition temperatures** at the walk step: `T_entity = 0.05` when transitioning from entity to chunk, `T_chunk = 0.05` when transitioning from chunk to entity. Both act as softmax sharpness.
+4. **Two-channel seeding** at query time: the question is embedded and softmaxed against chunk texts and entity labels separately, then the two seed distributions are mixed with `alpha = 0.5`.
 
-The walk operates on the resulting tripartite graph.
+The walk is a personalized PageRank with restart `c = 0.15`. Full ranking over all corpus chunks is read off the stationary distribution; no top-K cutoff is applied at ranking time.
 
-For projects that already ship linked notes (a wiki with `[[link]]` syntax and typed frontmatter), steps 1 to 3 are unnecessary: the concept graph is the wiki graph. This is the setting where the approach is cheapest.
+For projects that already ship linked notes (a wiki with `[[link]]` syntax and typed frontmatter), the entity layer is unnecessary because the concept graph is the wiki graph itself. This is the setting where the approach is cheapest to deploy.
 
 [Caveats]{.kicker}
 
 ## What we are not claiming
 
-- **This does not replace dense retrieval.** Dense similarity is what seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops that dense-alone misses.
-- **This has not been evaluated on all corpora.** MuSiQue is a stress test built for multi-hop; results there do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.
-- **Full-scale accuracy numbers are pending.** The rank-distribution collapse on the 21k-chunk full corpus is observed. The end-to-end answer accuracy of graph-informed retrieval at full scale is being validated at time of writing.
+- **This does not replace dense retrieval.** Dense similarity seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops dense-alone misses.
+- **The 21k chain result is not in yet.** The 21k dense collapse is measured; the 21k chain result is projected, not observed. Do not cite the chain at scale until the deferred run completes.
+- **This has not been evaluated on all corpora.** MuSiQue is a stress test built for multi-hop; results here do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.
 - **GraphRAG and community-based methods are related.** [@edge2024graphrag] Hierarchical community summaries are a different way to solve the same envelope-assembly problem. Which method wins depends on corpus structure; both beat plain dense at scale.
+
+## Reproduction {.unnumbered}
+
+```bash
+# Dense RAG rank positions on the 21k corpus
+python -m experiments.musique.sparql.design.vanilla_dense_positions --scope full
+
+# Chain v5c2 rank positions on the 281 gold-only corpus
+python -m experiments.musique.chain_v5c2_rank_analysis
+```
 
 ## References {.unnumbered}
 

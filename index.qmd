@@ -37,18 +37,30 @@ The rest of this page unpacks what that means, why it matters, and what an alter
 
 Dense retrieval on a modest corpus, of order a thousand chunks, and a question that needs one chunk to answer, is very good. It is the case most public benchmarks are built around, and it is the case the "just do RAG" advice was written for.
 
-Multi-hop QA at scale is a different problem. MuSiQue [@trivedi2022musique] provides a stress test: about 21,000 candidate chunks, questions that require chaining evidence across two, three, or four documents, and a rank distribution that gets qualitatively worse the further along the chain you go. First-hop chunks are usually retrievable at reasonable K. Second-hop chunks are less so. By the fourth hop, dense similarity is essentially ranking chunks the way it would rank random documents from the corpus.
+Multi-hop QA at scale is a different problem. MuSiQue [@trivedi2022musique] provides a stress test: 21,100 candidate paragraphs, questions that require chaining evidence across two, three, or four documents, and a rank distribution that collapses hop by hop. Concretely, on the MuSiQue TEST set with plain dense retrieval, the *rank* of each gold chunk:
+
+| Hop group  | Direct-match chunk | Bridge chunk | Deeper bridge | Deepest chunk |
+|------------|-------------------:|-------------:|--------------:|--------------:|
+| 2-hop      | median rank **1**  | **143**      |               |               |
+| 3-hop      | **1**              | 13           | **101**       |               |
+| 4-hop      | **1**              | 45           | 268           | **1,796**     |
+
+The direct-match chunk lands at rank 1 at every hop count, even against 21,000 distractors. Cosine similarity finds it every time. Every chunk after that scatters. The deepest chunk of a 4-hop question sits at median **rank 1,796**, p75 3,027, worst case 9,572. Dense retrieval on this corpus is not returning noise; it is returning the *wrong specific evidence*, which is worse.
 
 This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is *for*. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.
 
-### The K question
+### The K question sharpens this
 
 Two constants set the operating envelope:
 
 - **K = 30** is roughly the ceiling before *lost-in-the-middle* effects [@liu2023lostmiddle] start eating into answer quality. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. Push K above 30 and you gain recall at the cost of the model actually using what you retrieved.
 - **K = 10** is the more common production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the model attends to.
 
-Neither cutoff is generous enough for a corpus of tens of thousands of chunks with multi-hop questions. Not because the retrieval is bad; because the *envelope* the model needs is spread across more chunks than K can hold.
+At **K = 30**, MuSiQue's `all-gold@30` is **22 %** on the 21k corpus. Every gold chunk survives inside the top 30 for one question in five. To hit 77 %, you would have to feed the language model roughly 2,000 chunks per question. That is well past the practical ceiling on any current model.
+
+At **K = 10**, the picture is sharper. The direct-match chunk is essentially always there. The 2-hop bridge chunk (median rank 143) lands inside K = 10 for maybe 10 to 15 % of questions. The 4-hop deepest chunk (median rank 1,796) effectively never does. Dense retrieval at K = 10 gives the language model one out of four required gold chunks for a 4-hop question, and the model cannot answer without the other three. Turning K up past 30 does not fix it because the attention penalty grows faster than recall improves.
+
+The gap is not a coverage bug. It is a ranking gap: the deep chunks are in the corpus, dense retrieval just does not rank them near the top.
 
 [On terminology]{.kicker}
 
@@ -72,7 +84,7 @@ Because question decomposition operates on the *question side*. It reduces the r
 
 ## Retrieval as a trajectory
 
-The alternative to "one query, top-K by similarity" is "walk the graph." Chunks, concepts, and documents are nodes. Edges come cheaply: concept-concept links from a wiki or from term co-occurrence, chunk-concept from typed frontmatter or entity extraction, document-chunk from layout parsing. Once the graph exists, a **random walk with restart** gives you a stationary distribution that captures where information *tends to cluster*:
+The alternative to "one query, top-K by similarity" is "walk the graph." The graph used in the results below is deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a **random walk with restart** gives you a stationary distribution that captures where information *tends to cluster*:
 
 $$
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
@@ -103,13 +115,14 @@ This is why "just decompose the question" is not a substitute. The graph structu
 
 ## What this buys you
 
-On MuSiQue, using a wiki-style graph built from the corpus itself, the walk-informed neighborhood catches supporting evidence that dense similarity misses on the second, third, and fourth hop. See the [data appendix](appendix.qmd) for the rank tables.
+On the 281-chunk gold-only subset, the chain closes the ranking gap on exactly the chunks dense retrieval buries. `g_1` is a tie at rank 1 for both retrievers, as it should be. The 2-hop bridge chunk (`g_2`) drops from a dense p75 of **17** to a chain p75 of **3**. The 4-hop deepest chunk (`g_4`) drops from a dense p75 of **65** to a chain p75 of **29**. Full tables and the metric definition are in the [data appendix](appendix.qmd).
 
 The honest caveats:
 
-- The strongest evidence to date is on the *gold-only* subset: questions where the supporting evidence is known to be present in the corpus. This isolates the retrieval problem from the recall problem.
-- Full-scale evaluation on the 21,000-chunk corpus is in progress at the time of writing. The rank-distribution collapse we see with dense retrieval at that scale is real; the exact numbers for graph-informed retrieval at the same scale are still being validated. Values published here are updated as runs complete.
-- Graph construction is not free. If the corpus does not come with links, they have to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing; extracted graphs from raw PDFs cost more.
+- The strongest evidence right now is on the *gold-only* subset, where every gold chunk is guaranteed to be present in the corpus. This isolates the retrieval-*ranking* problem from the recall problem, and is where the chain has been fully evaluated.
+- **The 21k-scale chain-vs-dense comparison is not run yet.** The dense side is measured (`g_4` median 1,796). The chain at scale is deferred, blocked on a ~\$300 distillation step. The 21k number in this section will change from projection to measurement as that run lands. Do not cite the chain at scale until then.
+- One reversal: the chain's worst-case 4-hop `g_4` (max 206) is worse than dense's (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury one worse than dense would. This is a known RWR failure mode, not a metric artifact.
+- Graph construction is not free. If the corpus does not come with links, an entity layer has to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing.
 
 [Deeper]{.kicker}
 
