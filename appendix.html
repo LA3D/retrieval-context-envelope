@@ -183,16 +183,8 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
    
   <ul>
   <li><a href="#the-corpus" id="toc-the-corpus" class="nav-link active" data-scroll-target="#the-corpus">The corpus</a></li>
-  <li><a href="#where-do-the-supporting-chunks-land" id="toc-where-do-the-supporting-chunks-land" class="nav-link" data-scroll-target="#where-do-the-supporting-chunks-land">Where do the supporting chunks land?</a>
-  <ul class="collapse">
-  <li><a href="#dense-rag-on-the-full-21100-chunk-corpus" id="toc-dense-rag-on-the-full-21100-chunk-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-full-21100-chunk-corpus">Dense RAG on the full 21,100-chunk corpus</a></li>
-  <li><a href="#dense-rag-on-the-281-chunk-gold-only-corpus" id="toc-dense-rag-on-the-281-chunk-gold-only-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-281-chunk-gold-only-corpus">Dense RAG on the 281-chunk gold-only corpus</a></li>
-  <li><a href="#per-hop-coverage-at-production-k" id="toc-per-hop-coverage-at-production-k" class="nav-link" data-scroll-target="#per-hop-coverage-at-production-k">Per-hop coverage at production K</a></li>
-  <li><a href="#why-k-30-is-the-useful-ceiling" id="toc-why-k-30-is-the-useful-ceiling" class="nav-link" data-scroll-target="#why-k-30-is-the-useful-ceiling">Why K = 30 is the useful ceiling</a></li>
-  </ul></li>
-  <li><a href="#gold-only-dense-vs-graph-informed" id="toc-gold-only-dense-vs-graph-informed" class="nav-link" data-scroll-target="#gold-only-dense-vs-graph-informed">Gold-only: dense vs graph-informed</a></li>
-  <li><a href="#the-one-open-comparison" id="toc-the-one-open-comparison" class="nav-link" data-scroll-target="#the-one-open-comparison">The one open comparison</a></li>
-  <li><a href="#how-the-graph-is-built" id="toc-how-the-graph-is-built" class="nav-link" data-scroll-target="#how-the-graph-is-built">How the graph is built</a></li>
+  <li><a href="#per-hop-coverage-at-k-10" id="toc-per-hop-coverage-at-k-10" class="nav-link" data-scroll-target="#per-hop-coverage-at-k-10">Per-hop coverage at K = 10</a></li>
+  <li><a href="#why-k-30-is-the-ceiling" id="toc-why-k-30-is-the-ceiling" class="nav-link" data-scroll-target="#why-k-30-is-the-ceiling">Why K = 30 is the ceiling</a></li>
   <li><a href="#what-we-are-not-claiming" id="toc-what-we-are-not-claiming" class="nav-link" data-scroll-target="#what-we-are-not-claiming">What we are not claiming</a></li>
   <li><a href="#reproduction" id="toc-reproduction" class="nav-link" data-scroll-target="#reproduction">Reproduction</a></li>
   <li><a href="#references" id="toc-references" class="nav-link" data-scroll-target="#references">References</a></li>
@@ -205,7 +197,7 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">Data appendix</h1>
-<p class="subtitle lead">Rank tables, gold-only comparisons, and methodology notes for the claims on the landing page.</p>
+<p class="subtitle lead">The K=10 per-hop coverage table behind the landing page, and the methodology it comes from.</p>
 </div>
 
 
@@ -228,325 +220,76 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
 </header>
 
 
-<p>This page is the empirical backing for the <a href="./index.html">landing page</a>. It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. The scaled chain-on-21k comparison is the one open cell; everything else is measured.</p>
+<p>This page is the empirical backing for the <a href="./index.html">landing page</a>, scoped to the one comparison that carries the argument: what dense retrieval actually delivers to the language model at the production cutoff of K = 10 on a realistic multi-hop corpus. It is versioned alongside the code that produces the numbers.</p>
 <p><span class="kicker">Setup</span></p>
 <section id="the-corpus" class="level2">
 <h2 class="anchored" data-anchor-id="the-corpus">The corpus</h2>
-<p>The evaluation runs on MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span>, a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the <em>answerable</em> split (2-, 3-, and 4-hop questions with grounded supporting evidence).</p>
+<p>The evaluation runs on MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span>, a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the <em>answerable</em> split, 2-, 3-, and 4-hop questions with grounded supporting evidence.</p>
 <ul>
-<li><strong>Full corpus</strong>: 21,100 candidate paragraphs (the union of every question’s supporting passages plus MuSiQue’s distractor pool).</li>
-<li><strong>Gold-only subset</strong>: 281 chunks, restricted to the paragraphs that contain the supporting evidence for the 120-question stratified sample. This isolates the retrieval-ranking problem from the recall problem.</li>
+<li><strong>Corpus</strong>: 21,100 candidate paragraphs, the union of every question’s supporting passages plus MuSiQue’s distractor pool.</li>
 <li><strong>Held-out test set</strong>: 90 questions, 30 each at 2-, 3-, and 4-hop.</li>
+<li><strong>Retriever</strong>: plain dense RAG, cosine similarity between question and paragraph embeddings, mpnet, L2-normalized. No entity layer, no walk, no sub-questions. This is what you get out of the box.</li>
 </ul>
-<p><span class="kicker">Rank distribution</span></p>
+<p><span class="kicker">The result</span></p>
 </section>
-<section id="where-do-the-supporting-chunks-land" class="level2">
-<h2 class="anchored" data-anchor-id="where-do-the-supporting-chunks-land">Where do the supporting chunks land?</h2>
-<p>The metric is <code>g_i</code>: the 1-indexed rank, within the corpus’s cosine ranking, of the <em>i-th-closest gold chunk</em> for a question. <code>g_1</code> is the gold chunk the retriever ranks highest; <code>g_4</code> is the deepest of a 4-hop question’s four gold chunks. Cells report <code>median [p75] (max)</code> over 30 questions.</p>
-<section id="dense-rag-on-the-full-21100-chunk-corpus" class="level3">
-<h3 class="anchored" data-anchor-id="dense-rag-on-the-full-21100-chunk-corpus">Dense RAG on the full 21,100-chunk corpus</h3>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 30%">
-<col style="width: 17%">
-<col style="width: 17%">
-<col style="width: 17%">
-<col style="width: 17%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>hops</th>
-<th>g1</th>
-<th>g2</th>
-<th>g3</th>
-<th>g4</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2-hop</td>
-<td>1 [2] (8)</td>
-<td><strong>143</strong> [786] (5042)</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>3-hop</td>
-<td>1 [2] (16)</td>
-<td>13 [47] (1138)</td>
-<td><strong>101</strong> [522] (5775)</td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>4-hop</td>
-<td>1 [3] (129)</td>
-<td>45 [182] (1388)</td>
-<td>268 [1049] (2394)</td>
-<td><strong>1796</strong> [3027] (9572)</td>
-</tr>
-</tbody>
-</table>
-</section>
-<section id="dense-rag-on-the-281-chunk-gold-only-corpus" class="level3">
-<h3 class="anchored" data-anchor-id="dense-rag-on-the-281-chunk-gold-only-corpus">Dense RAG on the 281-chunk gold-only corpus</h3>
-<table class="caption-top table">
-<thead>
-<tr class="header">
-<th>hops</th>
-<th>g1</th>
-<th>g2</th>
-<th>g3</th>
-<th>g4</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2-hop</td>
-<td>1 [1] (1)</td>
-<td>3 [17] (79)</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>3-hop</td>
-<td>1 [1] (1)</td>
-<td>2 [3] (15)</td>
-<td>5 [12] (77)</td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>4-hop</td>
-<td>1 [1] (3)</td>
-<td>3 [5] (37)</td>
-<td>7 [21] (45)</td>
-<td>30 [65] (144)</td>
-</tr>
-</tbody>
-</table>
-<p>Reading the two tables together makes the shape unmistakable. <code>g_1</code> sits at rank 1 in both corpora, at every hop count: the chunk that directly matches the question’s named entity is trivial for cosine. The deeper gold chunks are the ones that move. On 281 chunks, <code>g_4</code> for a 4-hop question sits at median 30, entirely usable. On 21,100 chunks, the same <code>g_4</code> sinks to median <strong>1,796</strong> with a p75 of <strong>3,027</strong>. First hop is not the problem. The problem is every gold chunk after the first, scaled against realistic distractors.</p>
-</section>
-<section id="per-hop-coverage-at-production-k" class="level3">
-<h3 class="anchored" data-anchor-id="per-hop-coverage-at-production-k">Per-hop coverage at production K</h3>
-<p>The rank medians turn into a concrete “what does the language model actually see?” table if you count, for each <code>g_i</code>, the fraction of questions where that gold chunk lands inside the top K. This is the useful metric. Numbers below are computed directly from <code>cache/p3v5/vanilla_dense_21k.json</code>, TEST split, 30 questions per hop group.</p>
+<section id="per-hop-coverage-at-k-10" class="level2">
+<h2 class="anchored" data-anchor-id="per-hop-coverage-at-k-10">Per-hop coverage at K = 10</h2>
+<p><code>g_i</code> is the <em>i</em>-th-closest gold chunk for a question: <code>g_1</code> is the gold chunk the retriever ranks highest, <code>g_2</code> the next, and so on. The table below reports the fraction of TEST questions whose slot-<code>i</code> gold chunk lands inside the top 10 of the retriever’s ranking. Numbers are computed directly from <code>cache/p3v5/vanilla_dense_21k.json</code>.</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
 <th>Hop group</th>
-<th>Slot</th>
-<th style="text-align: right;">K = 5</th>
-<th style="text-align: right;">K = 10</th>
-<th style="text-align: right;">K = 30</th>
-<th style="text-align: right;">K = 100</th>
+<th style="text-align: right;">g1</th>
+<th style="text-align: right;">g2</th>
+<th style="text-align: right;">g3</th>
+<th style="text-align: right;">g4</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td>2-hop</td>
-<td>g1</td>
-<td style="text-align: right;">93 %</td>
 <td style="text-align: right;">100 %</td>
-<td style="text-align: right;">100 %</td>
-<td style="text-align: right;">100 %</td>
-</tr>
-<tr class="even">
-<td>2-hop</td>
-<td>g2</td>
-<td style="text-align: right;">10 %</td>
 <td style="text-align: right;">17 %</td>
-<td style="text-align: right;">43 %</td>
-<td style="text-align: right;">43 %</td>
-</tr>
-<tr class="odd">
-<td>3-hop</td>
-<td>g1</td>
-<td style="text-align: right;">93 %</td>
-<td style="text-align: right;">97 %</td>
-<td style="text-align: right;">100 %</td>
-<td style="text-align: right;">100 %</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
 </tr>
 <tr class="even">
 <td>3-hop</td>
-<td>g2</td>
-<td style="text-align: right;">20 %</td>
+<td style="text-align: right;">97 %</td>
 <td style="text-align: right;">37 %</td>
-<td style="text-align: right;">60 %</td>
-<td style="text-align: right;">87 %</td>
-</tr>
-<tr class="odd">
-<td>3-hop</td>
-<td>g3</td>
 <td style="text-align: right;">0 %</td>
-<td style="text-align: right;">0 %</td>
-<td style="text-align: right;">23 %</td>
-<td style="text-align: right;">47 %</td>
-</tr>
-<tr class="even">
-<td>4-hop</td>
-<td>g1</td>
-<td style="text-align: right;">83 %</td>
-<td style="text-align: right;">87 %</td>
-<td style="text-align: right;">97 %</td>
-<td style="text-align: right;">97 %</td>
+<td style="text-align: right;"></td>
 </tr>
 <tr class="odd">
 <td>4-hop</td>
-<td>g2</td>
-<td style="text-align: right;">20 %</td>
+<td style="text-align: right;">87 %</td>
 <td style="text-align: right;">23 %</td>
-<td style="text-align: right;">40 %</td>
-<td style="text-align: right;">60 %</td>
-</tr>
-<tr class="even">
-<td>4-hop</td>
-<td>g3</td>
-<td style="text-align: right;">0 %</td>
 <td style="text-align: right;">3 %</td>
-<td style="text-align: right;">13 %</td>
-<td style="text-align: right;">37 %</td>
-</tr>
-<tr class="odd">
-<td>4-hop</td>
-<td>g4</td>
 <td style="text-align: right;">0 %</td>
-<td style="text-align: right;">0 %</td>
-<td style="text-align: right;">0 %</td>
-<td style="text-align: right;">7 %</td>
 </tr>
 </tbody>
 </table>
-<p>The story reads across the table in two directions. Down each K column: <code>g_1</code> always survives, and the coverage of every deeper slot collapses. Along each row from left to right: raising K helps the middle slots but does not touch the tail. <strong>4-hop <code>g_4</code> is a zero at K = 30 and only 7 % at K = 100.</strong> That is what “dense at scale cannot rank the deep chunks” means concretely; it is not that they are missing from the corpus, it is that dense sorts them into the thousands.</p>
-<div class="aside-note">
-<p>Why not headline <code>all-gold@K</code>? Because it is a strict-necessity metric (every gold chunk inside K, else the question is a miss) and it hides where the collapse actually happens. “22 % at K = 30” reads as “the retriever is a bit weak” and quietly gets discounted for “surely the LLM can guess with most of the chunks.” The per-hop table above says the same thing without letting the reader off the hook: the deep chunks are <em>nowhere</em> inside K.</p>
-</div>
+<p>Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count, and everything else falls off a cliff. For a 4-hop question, the language model gets one gold chunk out of the four the answer chain requires. The deepest chunk lands inside K = 10 for <strong>zero</strong> of thirty questions. The gap is not that the deep chunks are missing from the corpus. They are ranked into the thousands: the deepest 4-hop chunk sits at median rank <strong>1,796</strong> out of 21,100.</p>
+<p><span class="kicker">Why not raise K?</span></p>
 </section>
-<section id="why-k-30-is-the-useful-ceiling" class="level3">
-<h3 class="anchored" data-anchor-id="why-k-30-is-the-useful-ceiling">Why K = 30 is the useful ceiling</h3>
-<p><em>Lost-in-the-middle</em> <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> shows a U-shaped attention curve: language models attend well to the start and end of a long context and poorly to the middle. The penalty is measurable across both open-source and commercial models, and it gets worse with longer contexts. K = 30 is roughly the point where the middle-position penalty starts costing more accuracy than the extra recall buys back. Above K = 30 you are trading retriever recall against the model’s ability to use what you retrieved.</p>
-<p>K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely: every chunk is at a position the model attends to well. The modern pattern is <em>retrieve K = 50-100 with a cheap dense/BM25 hybrid, then rerank down to K = 5-10 with a cross-encoder</em>, which lets you use retriever recall without paying the attention penalty. The rerank step helps recover shallow multi-hop chunks (the 2-hop <code>g_2</code> in the table above) but cannot recover chunks that are outside the initial K = 100 candidate pool. Look at 4-hop <code>g_4</code> (7 % at K = 100) and 4-hop <code>g_3</code> (37 % at K = 100). Reranking cannot save what dense retrieval never surfaced.</p>
-<p><span class="kicker">Comparison</span></p>
-</section>
-</section>
-<section id="gold-only-dense-vs-graph-informed" class="level2">
-<h2 class="anchored" data-anchor-id="gold-only-dense-vs-graph-informed">Gold-only: dense vs graph-informed</h2>
-<p>The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same 281 paragraphs; the only difference is how they rank them.</p>
-<ul>
-<li><strong>Dense</strong>: cosine similarity between question embedding and paragraph embeddings (mpnet, L2-normalized), single-shot.</li>
-<li><strong>Chain v5c2</strong>: bipartite chunk-entity graph with structural occurrence-count edges (no chunk-chunk, no entity-entity). Random walk with restart, <code>c = 0.15</code>, <code>alpha = 0.5</code>, two-channel softmax seeding on question-chunk-text and question-entity-label.</li>
-</ul>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 8%">
-<col style="width: 9%">
-<col style="width: 12%">
-<col style="width: 21%">
-<col style="width: 20%">
-<col style="width: 27%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>hops</th>
-<th>metric</th>
-<th>g1</th>
-<th>g2</th>
-<th>g3</th>
-<th>g4</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2-hop</td>
-<td>dense</td>
-<td>1 [1] (1)</td>
-<td>3 <strong>[17]</strong> (79)</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="even">
-<td>2-hop</td>
-<td>chain</td>
-<td>1 [1] (1)</td>
-<td>2 <strong>[3]</strong> (54)</td>
-<td></td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>3-hop</td>
-<td>dense</td>
-<td>1 [1] (1)</td>
-<td>2 [3] (15)</td>
-<td>5 [12] (77)</td>
-<td></td>
-</tr>
-<tr class="even">
-<td>3-hop</td>
-<td>chain</td>
-<td>1 [1] (2)</td>
-<td>2 [2] (24)</td>
-<td>4 [5] (71)</td>
-<td></td>
-</tr>
-<tr class="odd">
-<td>4-hop</td>
-<td>dense</td>
-<td>1 [1] (3)</td>
-<td>3 [5] (37)</td>
-<td>7 [21] (45)</td>
-<td>30 <strong>[65]</strong> (144)</td>
-</tr>
-<tr class="even">
-<td>4-hop</td>
-<td>chain</td>
-<td>1 [1] (3)</td>
-<td>2 [3] (33)</td>
-<td>5 [12] (77)</td>
-<td>19 <strong>[29]</strong> (206)</td>
-</tr>
-</tbody>
-</table>
-<p>Three things fall out of this table:</p>
-<ul>
-<li><strong><code>g_1</code> is a tie.</strong> Dense cosine trivially finds the seed chunk; the walk adds nothing on the first hop, because the first hop is not the problem.</li>
-<li><strong>The chain wins on bridge chunks, more so the deeper the hop.</strong> 2-hop <code>g_2</code> p75 drops from <strong>17</strong> to <strong>3</strong>. 4-hop <code>g_4</code> p75 drops from <strong>65</strong> to <strong>29</strong>. The chunks that dense retrieval buries because they do not lexically match the question are the chunks the entity-bridge walk keeps near the top.</li>
-<li><strong>One reversal.</strong> The chain’s worst-case 4-hop <code>g_4</code> (max 206) is worse than dense’s (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury a single chunk worse than dense does. This is a known failure mode of RWR, not a metric artifact.</li>
-</ul>
-<p>The chain’s advantage concentrates on the deepest hop, which is exactly where the <em>trajectory-length argument</em> predicts it should: the walk’s reach scales with <code>(1 - c) / c</code>, and a low restart probability sends mass further into the graph.</p>
-<p><span class="kicker">Open</span></p>
-</section>
-<section id="the-one-open-comparison" class="level2">
-<h2 class="anchored" data-anchor-id="the-one-open-comparison">The one open comparison</h2>
-<p>The 21k-scale chain-vs-dense comparison is the still-open cell. Dense RAG on 21k is the collapsed baseline (<code>g_4</code> median 1,796, <code>all-gold@30</code> 22 %). The chain has been run on the 281 gold-only corpus (<code>g_4</code> median 19). The chain on the full 21k corpus is deferred, blocked on a distillation step estimated at roughly $300 in compute. The numbers here will be updated as soon as that run lands.</p>
-<p>The prediction to falsify: at 21k, the chain keeps every <code>g_i</code> inside K = 30, closing the <code>all-gold@30</code> gap from 22 % well into the 60s or higher. If it does not, the operator-splitting story on the <a href="./index.html">landing page</a> needs an accounting.</p>
-<p><span class="kicker">Methodology</span></p>
-</section>
-<section id="how-the-graph-is-built" class="level2">
-<h2 class="anchored" data-anchor-id="how-the-graph-is-built">How the graph is built</h2>
-<p>Chain v5c2 uses a bipartite chunk-entity graph. Concretely:</p>
-<ol type="1">
-<li><strong>Entity extraction</strong> over each paragraph, producing a canonical entity label per mention.</li>
-<li><strong>Chunk-entity edges</strong> weighted by the count of the entity’s occurrences inside the chunk. No chunk-chunk edges. No entity-entity edges.</li>
-<li><strong>Two transition temperatures</strong> at the walk step: <code>T_entity = 0.05</code> when transitioning from entity to chunk, <code>T_chunk = 0.05</code> when transitioning from chunk to entity. Both act as softmax sharpness.</li>
-<li><strong>Two-channel seeding</strong> at query time: the question is embedded and softmaxed against chunk texts and entity labels separately, then the two seed distributions are mixed with <code>alpha = 0.5</code>.</li>
-</ol>
-<p>The walk is a personalized PageRank with restart <code>c = 0.15</code>. Full ranking over all corpus chunks is read off the stationary distribution; no top-K cutoff is applied at ranking time.</p>
-<p>For projects that already ship linked notes (a wiki with <code>[[link]]</code> syntax and typed frontmatter), the entity layer is unnecessary because the concept graph is the wiki graph itself. This is the setting where the approach is cheapest to deploy.</p>
+<section id="why-k-30-is-the-ceiling" class="level2">
+<h2 class="anchored" data-anchor-id="why-k-30-is-the-ceiling">Why K = 30 is the ceiling</h2>
+<p><em>Lost-in-the-middle</em> <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> shows a U-shaped attention curve: language models attend well to the start and end of a long context and poorly to the middle. The penalty is measurable across both open-source and commercial models. Around K = 30 the middle-position attention penalty starts costing more accuracy than the extra recall buys back. Above K = 30 you are trading retriever recall against the model’s ability to use what you retrieved.</p>
+<p>K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely, every chunk in a position the model attends to well. The now-standard pattern is <em>retrieve K = 50-100 with a cheap dense-or-BM25 hybrid, then rerank down to K = 5-10 with a cross-encoder</em>. That helps for shallow multi-hop where the missing chunk is in the K = 100 candidate pool. It cannot help the 4-hop deepest chunk, because a chunk buried at rank 1,796 is not in the pool the reranker sees.</p>
 <p><span class="kicker">Caveats</span></p>
 </section>
 <section id="what-we-are-not-claiming" class="level2">
 <h2 class="anchored" data-anchor-id="what-we-are-not-claiming">What we are not claiming</h2>
 <ul>
-<li><strong>This does not replace dense retrieval.</strong> Dense similarity seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops dense-alone misses.</li>
-<li><strong>The 21k chain result is not in yet.</strong> The 21k dense collapse is measured; the 21k chain result is projected, not observed. Do not cite the chain at scale until the deferred run completes.</li>
-<li><strong>This has not been evaluated on all corpora.</strong> MuSiQue is a stress test built for multi-hop; results here do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.</li>
-<li><strong>GraphRAG and community-based methods are related.</strong> <span class="citation" data-cites="edge2024graphrag">(<a href="#ref-edge2024graphrag" role="doc-biblioref">Edge et al., 2024</a>)</span> Hierarchical community summaries are a different way to solve the same envelope-assembly problem. Which method wins depends on corpus structure; both beat plain dense at scale.</li>
+<li><strong>Dense retrieval is not broken.</strong> For single-hop questions and small corpora it works well. The claim is scoped: multi-hop over a realistic distractor pool, at the K the attention curve forces you to use.</li>
+<li><strong>MuSiQue is a stress test.</strong> Results here do not automatically generalize to single-hop domains or to corpora where the evidence is not graph-structured. It is the right benchmark for making the failure visible; it is not the only benchmark that matters.</li>
+<li><strong>GraphRAG and community-based methods are related.</strong> <span class="citation" data-cites="edge2024graphrag">(<a href="#ref-edge2024graphrag" role="doc-biblioref">Edge et al., 2024</a>)</span> Hierarchical community summaries are a different way to assemble the envelope. Which method wins depends on corpus structure; both address the failure the table above documents.</li>
 </ul>
 </section>
 <section id="reproduction" class="level2 unnumbered">
 <h2 class="unnumbered anchored" data-anchor-id="reproduction">Reproduction</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Dense RAG rank positions on the 21k corpus</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> experiments.musique.sparql.design.vanilla_dense_positions <span class="at">--scope</span> full</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Chain v5c2 rank positions on the 281 gold-only corpus</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> experiments.musique.chain_v5c2_rank_analysis</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-m</span> experiments.musique.sparql.design.vanilla_dense_positions <span class="at">--scope</span> full</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The script writes <code>cache/p3v5/vanilla_dense_21k.json</code> and the coverage table is a <code>numpy.count_nonzero</code> on the resulting rank arrays.</p>
 </section>
 <section id="references" class="level2 unnumbered">
 <h2 class="unnumbered anchored" data-anchor-id="references">References</h2>

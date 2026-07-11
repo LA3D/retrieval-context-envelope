@@ -181,16 +181,13 @@ window.Quarto = {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#dense-rag-at-scale" id="toc-dense-rag-at-scale" class="nav-link active" data-scroll-target="#dense-rag-at-scale">Dense RAG at scale</a>
-  <ul class="collapse">
-  <li><a href="#the-k-question-sharpens-this" id="toc-the-k-question-sharpens-this" class="nav-link" data-scroll-target="#the-k-question-sharpens-this">The K question sharpens this</a></li>
-  </ul></li>
+  <li><a href="#dense-rag-at-k-10" id="toc-dense-rag-at-k-10" class="nav-link active" data-scroll-target="#dense-rag-at-k-10">Dense RAG at K = 10</a></li>
   <li><a href="#two-kinds-of-hop" id="toc-two-kinds-of-hop" class="nav-link" data-scroll-target="#two-kinds-of-hop">Two kinds of “hop”</a></li>
   <li><a href="#retrieval-as-a-trajectory" id="toc-retrieval-as-a-trajectory" class="nav-link" data-scroll-target="#retrieval-as-a-trajectory">Retrieval as a trajectory</a>
   <ul class="collapse">
   <li><a href="#why-the-walk-happens-before-the-question-arrives" id="toc-why-the-walk-happens-before-the-question-arrives" class="nav-link" data-scroll-target="#why-the-walk-happens-before-the-question-arrives">Why the walk happens <em>before</em> the question arrives</a></li>
   </ul></li>
-  <li><a href="#what-this-buys-you" id="toc-what-this-buys-you" class="nav-link" data-scroll-target="#what-this-buys-you">What this buys you</a></li>
+  <li><a href="#what-this-changes" id="toc-what-this-changes" class="nav-link" data-scroll-target="#what-this-changes">What this changes</a></li>
   <li><a href="#operator-splitting" id="toc-operator-splitting" class="nav-link" data-scroll-target="#operator-splitting">Operator splitting</a></li>
   <li><a href="#what-to-do-with-all-this" id="toc-what-to-do-with-all-this" class="nav-link" data-scroll-target="#what-to-do-with-all-this">What to do with all this</a></li>
   <li><a href="#where-to-go-from-here" id="toc-where-to-go-from-here" class="nav-link" data-scroll-target="#where-to-go-from-here">Where to go from here</a></li>
@@ -263,7 +260,7 @@ window.Quarto = {
 <div>
   <div class="abstract">
     <div class="block-title">Abstract</div>
-    <p>Most public writing about retrieval-augmented generation treats retrieval as “find the chunk that answers the question.” This site argues that framing is wrong at scale. What retrieval has to assemble is a <em>context envelope</em>: the local neighborhood of concepts, layout cues, and cross-document evidence around the question. Dense similarity search is one way to build an envelope when it fits in a small top-K. When the envelope is spread across a graph that similarity cannot traverse, a graph-informed retrieval, formalized as a random walk with restart, does the assembly work that dense retrieval cannot.</p>
+    <p>Most public writing about retrieval-augmented generation treats retrieval as “find the chunk that answers the question.” This site argues that framing is wrong at scale. What retrieval has to assemble is a <em>context envelope</em>: the local neighborhood of concepts, layout cues, and cross-document evidence around the question. Dense similarity search assembles the envelope well when it fits inside a small top-K. When it does not, the assembly job stops being a retrieval problem and becomes a trajectory problem: a walk over a graph the embedding does not encode.</p>
   </div>
 </div>
 
@@ -275,63 +272,16 @@ window.Quarto = {
 <div class="claim">
 <p>RAG is not about answering questions. It is about assembling a <strong>context envelope</strong>: the local neighborhood of concepts, layout, and cross-document evidence around the question. When the envelope is missing, the language model cannot answer, even when the strictly correct chunk is in the top-K. Dense retrieval assembles the envelope well when it fits inside a small K. Once the envelope is spread across a graph that similarity cannot traverse, the assembly job is not a retrieval problem anymore. It is a trajectory problem.</p>
 </div>
-<p>The rest of this page unpacks what that means, why it matters, and what an alternative looks like. The <a href="./appendix.html">data appendix</a> has the underlying rank tables and methodology.</p>
+<p>The rest of this page unpacks what that means, why it matters, and what an alternative looks like. The <a href="./appendix.html">data appendix</a> has the underlying numbers.</p>
 <p><span class="kicker">The failure mode</span></p>
-<section id="dense-rag-at-scale" class="level2">
-<h2 class="anchored" data-anchor-id="dense-rag-at-scale">Dense RAG at scale</h2>
-<p>Dense retrieval on a modest corpus, of order a thousand chunks, and a question that needs one chunk to answer, is very good. It is the case most public benchmarks are built around, and it is the case the “just do RAG” advice was written for.</p>
-<p>Multi-hop QA at scale is a different problem. MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span> provides a stress test: 21,100 candidate paragraphs, questions that require chaining evidence across two, three, or four documents, and a rank distribution that collapses hop by hop. Concretely, on the MuSiQue TEST set with plain dense retrieval, the <em>rank</em> of each gold chunk:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 15%">
-<col style="width: 26%">
-<col style="width: 18%">
-<col style="width: 19%">
-<col style="width: 19%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Hop group</th>
-<th style="text-align: right;">Direct-match chunk</th>
-<th style="text-align: right;">Bridge chunk</th>
-<th style="text-align: right;">Deeper bridge</th>
-<th style="text-align: right;">Deepest chunk</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>2-hop</td>
-<td style="text-align: right;">median rank <strong>1</strong></td>
-<td style="text-align: right;"><strong>143</strong></td>
-<td style="text-align: right;"></td>
-<td style="text-align: right;"></td>
-</tr>
-<tr class="even">
-<td>3-hop</td>
-<td style="text-align: right;"><strong>1</strong></td>
-<td style="text-align: right;">13</td>
-<td style="text-align: right;"><strong>101</strong></td>
-<td style="text-align: right;"></td>
-</tr>
-<tr class="odd">
-<td>4-hop</td>
-<td style="text-align: right;"><strong>1</strong></td>
-<td style="text-align: right;">45</td>
-<td style="text-align: right;">268</td>
-<td style="text-align: right;"><strong>1,796</strong></td>
-</tr>
-</tbody>
-</table>
-<p>The direct-match chunk lands at rank 1 at every hop count, even against 21,000 distractors. Cosine similarity finds it every time. Every chunk after that scatters. The deepest chunk of a 4-hop question sits at median <strong>rank 1,796</strong>, p75 3,027, worst case 9,572. Dense retrieval on this corpus is not returning noise; it is returning the <em>wrong specific evidence</em>, which is worse.</p>
-<p>This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is <em>for</em>. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.</p>
-<section id="the-k-question-sharpens-this" class="level3">
-<h3 class="anchored" data-anchor-id="the-k-question-sharpens-this">The K question sharpens this</h3>
-<p>Two constants set the operating envelope:</p>
+<section id="dense-rag-at-k-10" class="level2">
+<h2 class="anchored" data-anchor-id="dense-rag-at-k-10">Dense RAG at K = 10</h2>
+<p>Two constants set the operating envelope for production RAG:</p>
 <ul>
 <li><strong>K = 10</strong> is the modal production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the language model actually attends to. This is the number to design against.</li>
-<li><strong>K = 30</strong> is the <em>upper bound</em>, the point at which <em>lost-in-the-middle</em> effects <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of “just retrieve more.”</li>
+<li><strong>K = 30</strong> is the <em>upper bound</em>, the point at which <em>lost-in-the-middle</em> effects <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in the middle of a long context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of “just retrieve more.”</li>
 </ul>
-<p>What the language model actually sees at K = 10 on the 21k corpus, per hop group (fraction of TEST questions whose slot-<code>i</code> gold chunk lands inside the top 10):</p>
+<p>What plain dense retrieval delivers to the language model at K = 10 on a 21,100-chunk MuSiQue <span class="citation" data-cites="trivedi2022musique">(<a href="#ref-trivedi2022musique" role="doc-biblioref">Trivedi et al., 2022</a>)</span> corpus, per hop group (fraction of TEST questions whose slot-<code>i</code> gold chunk lands inside the top 10):</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
@@ -366,10 +316,10 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<p>The direct-match chunk is essentially always in front of the model. Everything else drops off a cliff. For a 4-hop question, the model receives <code>g_1</code> in 87 % of cases and effectively nothing else; the deepest chunk (<code>g_4</code>) lands inside K = 10 for zero out of thirty questions.</p>
-<p>Raising to K = 30 recovers some middle chunks but does not touch the tail: 4-hop <code>g_3</code> climbs to 13 %, 4-hop <code>g_4</code> stays at <strong>0 %</strong>. Even at K = 100, 4-hop <code>g_4</code> is only <strong>7 %</strong>. This is the shape that matters. The failure is not a coverage bug you can fix by turning K up. It is a ranking failure: the deep chunks are in the corpus, and dense retrieval sorts them far below the direct-match. See the <a href="./appendix.html">data appendix</a> for the full K = 5 / 10 / 30 / 100 sweep.</p>
+<p>Read the table by row. <code>g_1</code> is the gold chunk the retriever ranks highest for a question, <code>g_2</code> the next, and so on. Dense retrieval reliably delivers the direct-match chunk (<code>g_1</code>) at every hop count. Everything else falls off a cliff. For a 4-hop question, the language model receives one gold chunk out of the four the answer chain requires, and the deepest chunk lands inside K = 10 for zero out of thirty questions.</p>
+<p>The failure is not that the deep chunks are missing from the corpus. It is that dense retrieval ranks them into the thousands: the 4-hop <code>g_4</code> median rank is <strong>1,796</strong> out of 21,100. Raising K past the K = 30 ceiling does not save it, because a chunk ranked at 1,796 is nowhere near the pool a reranker would even see. This is a ranking gap, not a recall gap, and turning the retriever dial does not close it.</p>
+<p>This is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is <em>for</em>. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.</p>
 <p><span class="kicker">On terminology</span></p>
-</section>
 </section>
 <section id="two-kinds-of-hop" class="level2">
 <h2 class="anchored" data-anchor-id="two-kinds-of-hop">Two kinds of “hop”</h2>
@@ -385,7 +335,7 @@ window.Quarto = {
 </section>
 <section id="retrieval-as-a-trajectory" class="level2">
 <h2 class="anchored" data-anchor-id="retrieval-as-a-trajectory">Retrieval as a trajectory</h2>
-<p>The alternative to “one query, top-K by similarity” is “walk the graph.” The graph used in the results below is deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a <strong>random walk with restart</strong> gives you a stationary distribution that captures where information <em>tends to cluster</em>:</p>
+<p>The alternative to “one query, top-K by similarity” is “walk the graph.” The graph can be deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a <strong>random walk with restart</strong> gives you a stationary distribution that captures where information <em>tends to cluster</em>:</p>
 <p><span class="math display">\[
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
 \]</span></p>
@@ -407,19 +357,18 @@ window.Quarto = {
 <li>Re-rank the neighborhood locally against the question.</li>
 </ol>
 <p>This is why “just decompose the question” is not a substitute. The graph structure that the walk discovered is already there. The question is used to <em>choose which walk-informed neighborhood to pull</em>, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.</p>
-<p><span class="kicker">The result</span></p>
+<p><span class="kicker">Why the framing matters</span></p>
 </section>
 </section>
-<section id="what-this-buys-you" class="level2">
-<h2 class="anchored" data-anchor-id="what-this-buys-you">What this buys you</h2>
-<p>On the 281-chunk gold-only subset, the chain closes the ranking gap on exactly the chunks dense retrieval buries. <code>g_1</code> is a tie at rank 1 for both retrievers, as it should be. The 2-hop bridge chunk (<code>g_2</code>) drops from a dense p75 of <strong>17</strong> to a chain p75 of <strong>3</strong>. The 4-hop deepest chunk (<code>g_4</code>) drops from a dense p75 of <strong>65</strong> to a chain p75 of <strong>29</strong>. Full tables and the metric definition are in the <a href="./appendix.html">data appendix</a>.</p>
-<p>The honest caveats:</p>
+<section id="what-this-changes" class="level2">
+<h2 class="anchored" data-anchor-id="what-this-changes">What this changes</h2>
+<p>The failure table above says nothing about whether <em>any</em> graph-informed retriever solves the problem in practice. That is an empirical question with an empirical answer, and it is a follow-up. What the framing changes is what you are looking for when you build a retriever in the first place.</p>
 <ul>
-<li>The strongest evidence right now is on the <em>gold-only</em> subset, where every gold chunk is guaranteed to be present in the corpus. This isolates the retrieval-<em>ranking</em> problem from the recall problem, and is where the chain has been fully evaluated.</li>
-<li><strong>The 21k-scale chain-vs-dense comparison is not run yet.</strong> The dense side is measured (<code>g_4</code> median 1,796). The chain at scale is deferred, blocked on a ~$300 distillation step. The 21k number in this section will change from projection to measurement as that run lands. Do not cite the chain at scale until then.</li>
-<li>One reversal: the chain’s worst-case 4-hop <code>g_4</code> (max 206) is worse than dense’s (max 144). Walks usually lift deep chunks but occasionally misroute mass and bury one worse than dense would. This is a known RWR failure mode, not a metric artifact.</li>
-<li>Graph construction is not free. If the corpus does not come with links, an entity layer has to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing.</li>
+<li>Stop optimizing embeddings. <code>g_1</code> is at rank 1 for every hop count already. Another point of MTEB is not going to move the 4-hop <code>g_4</code> from rank 1,796 to rank 10.</li>
+<li>Start thinking about the graph the evidence actually lives on. If the corpus has links (wikis, citations, typed frontmatter) the graph is free. If it does not, an entity layer is a cheap substitute.</li>
+<li>Treat retrieval as a two-step: assemble the envelope on the graph (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.</li>
 </ul>
+<p>This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.</p>
 <p><span class="kicker">Deeper</span></p>
 </section>
 <section id="operator-splitting" class="level2">
@@ -443,7 +392,7 @@ window.Quarto = {
 <section id="where-to-go-from-here" class="level2">
 <h2 class="anchored" data-anchor-id="where-to-go-from-here">Where to go from here</h2>
 <ul>
-<li><strong><a href="./appendix.html">Data appendix</a></strong>: the rank tables, the gold-only comparison, the methodology.</li>
+<li><strong><a href="./appendix.html">Data appendix</a></strong>: the K = 10 coverage table, methodology, and reproduction script.</li>
 <li><strong>The WGRA talk</strong>: full slides at <a href="https://chrissweet.github.io/wgra-talk-2026/">chrissweet.github.io/wgra-talk-2026</a> if you want the visual walk-through.</li>
 <li><strong>The wiki-memory template</strong>: <a href="https://github.com/crcresearch/llm-wiki-memory-template">github.com/crcresearch/llm-wiki-memory-template</a> for the pattern that makes graph construction a side effect of writing.</li>
 <li><strong>The Markov RAG source</strong>: <a href="https://github.com/tcflab/markov_embeddings_and_rag">github.com/tcflab/markov_embeddings_and_rag</a> for the embedding-and-walk pipeline.</li>
