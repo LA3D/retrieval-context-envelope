@@ -29,7 +29,20 @@ The evaluation runs on MuSiQue [@trivedi2022musique], a multi-hop question-answe
 | 3-hop      |  97 %  |  37 % |   0 % |       |
 | 4-hop      |  87 %  |  23 % |   3 % |   0 % |
 
-Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop count, and everything else falls off a cliff. For a 4-hop question, the language model gets one gold chunk out of the four the answer chain requires. The deepest chunk lands inside K = 10 for **zero** of thirty questions. The gap is not that the deep chunks are missing from the corpus. They are ranked into the thousands: the deepest 4-hop chunk sits at median rank **1,796** out of 21,100.
+Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop count, and everything else falls off a cliff.
+
+A multi-hop question can only be answered when *every* gold chunk it needs is inside K, so retrieval quality is bounded by the deepest slot the question requires. Reading the diagonal:
+
+| Hop count | Effective retrieval at K = 10 |
+|-----------|------------------------------:|
+| 1-hop     |                        100 %  |
+| 2-hop     |                         17 %  |
+| 3-hop     |                          0 %  |
+| 4-hop     |                          0 %  |
+
+Single-hop retrieval works. Multi-hop retrieval does not work at production K. The 1-hop row is inferred from `g_1`'s 100 % coverage across all hop counts; MuSiQue does not include 1-hop questions in this set.
+
+The gap is not that the deep chunks are missing from the corpus. They are ranked into the thousands: the deepest 4-hop chunk sits at median rank **1,796** out of 21,100.
 
 [Why not raise K?]{.kicker}
 

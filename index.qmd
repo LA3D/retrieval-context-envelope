@@ -48,7 +48,18 @@ What plain dense retrieval delivers to the language model at K = 10 on a 21,100-
 | 3-hop     |  97 %|  37 %|   0 %|      |
 | 4-hop     |  87 %|  23 %|   3 %|   0 %|
 
-Read the table by row. `g_1` is the gold chunk the retriever ranks highest for a question, `g_2` the next, and so on. Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop count. Everything else falls off a cliff. For a 4-hop question, the language model receives one gold chunk out of the four the answer chain requires, and the deepest chunk lands inside K = 10 for zero out of thirty questions.
+Read the table by row. `g_1` is the gold chunk the retriever ranks highest for a question, `g_2` the next, and so on. Dense retrieval reliably delivers the direct-match chunk (`g_1`) at every hop count. Everything else falls off a cliff.
+
+The sharper reading is *diagonal*. A multi-hop question can only be answered when *every* gold chunk it needs is inside K, so the effective retrieval quality per hop group is bounded by the deepest slot's coverage:
+
+| Hop count | Effective retrieval at K = 10 |
+|-----------|------------------------------:|
+| 1-hop     |                        100 %  |
+| 2-hop     |                         17 %  |
+| 3-hop     |                          0 %  |
+| 4-hop     |                          0 %  |
+
+Dense retrieval delivers single-hop reliably and multi-hop essentially never at the K the attention curve lets you use. The 1-hop row is inferred from `g_1`'s 100 % coverage across all hop counts; MuSiQue does not include 1-hop questions, but this is what dense would give you.
 
 The failure is not that the deep chunks are missing from the corpus. It is that dense retrieval ranks them into the thousands: the 4-hop `g_4` median rank is **1,796** out of 21,100. Raising K past the K = 30 ceiling does not save it, because a chunk ranked at 1,796 is nowhere near the pool a reranker would even see. This is a ranking gap, not a recall gap, and turning the retriever dial does not close it.
 
