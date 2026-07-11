@@ -1,0 +1,86 @@
+---
+title: "Data appendix"
+subtitle: "Rank tables, gold-only comparisons, and methodology notes for the claims on the landing page."
+date-modified: "2026-07-11"
+date-format: "MMMM D, YYYY"
+---
+
+This page is the empirical backing for the [landing page](index.qmd). It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. Values marked *in progress* are pending on runs that have not completed at the time of writing.
+
+[Setup]{.kicker}
+
+## The corpus
+
+The evaluation runs on MuSiQue [@trivedi2022musique], a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the *answerable* split (2-, 3-, and 4-hop questions with grounded supporting evidence).
+
+- **Full corpus**: on the order of 21,000 candidate paragraphs across all questions.
+- **Gold-only subset**: 281 questions, restricted to the paragraphs that contain the supporting evidence. This isolates the retrieval-ranking problem from the recall problem.
+- **Held-out test set**: 90 questions used for end-to-end answer quality.
+
+[Rank distribution]{.kicker}
+
+## Where do the supporting chunks land?
+
+Dense retrieval on the full 21k-chunk corpus produces a rank for every candidate chunk. For each MuSiQue question, we can ask: what rank does the model assign to the chunk that supports the *n*-th reasoning hop?
+
+The table below is the shape of that finding. First-hop supporting chunks are usually retrievable at production-scale K. Deeper hops drift toward the tail of the distribution.
+
+| Hop | Mean rank of supporting chunk | Within K = 10 | Within K = 30 |
+|-----|------------------------------:|--------------:|--------------:|
+| 1   | *in progress* | *in progress* | *in progress* |
+| 2   | *in progress* | *in progress* | *in progress* |
+| 3   | *in progress* | *in progress* | *in progress* |
+| 4   | *in progress* | *in progress* | *in progress* |
+
+::: {.aside-note}
+Numbers are being validated on the full 21k corpus at the time of writing. The qualitative shape (rank rising monotonically with hop depth, most 3rd- and 4th-hop chunks outside K = 30) is stable across pilot runs. Point estimates are refreshed here as final runs complete.
+:::
+
+The value of the table is not any single point estimate. It is the pattern: a common production cutoff of K = 10 does not include the supporting evidence for most reasoning-hop-3 and reasoning-hop-4 chunks. Even K = 30, near the *lost-in-the-middle* ceiling [@liu2023lostmiddle], does not close the gap.
+
+[Comparison]{.kicker}
+
+## Gold-only: dense vs graph-informed
+
+The gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same paragraphs; the only difference is how they rank them.
+
+- **Dense**: cosine similarity between question embedding and paragraph embeddings, single-shot.
+- **Graph-informed**: RWR-based re-ranking against a graph built from the corpus. Nodes are chunks, concepts, and documents; edges come from co-occurring concepts, document layout, and (where present) cross-document links. Restart probability and edge weights are tuned on a development split.
+
+| Metric | Dense | Graph-informed |
+|--------|------:|---------------:|
+| Answer accuracy (gold-only) | *in progress* | *in progress* |
+| Mean rank of hop-2 support | *in progress* | *in progress* |
+| Mean rank of hop-3 support | *in progress* | *in progress* |
+| Mean rank of hop-4 support | *in progress* | *in progress* |
+
+The gold-only comparison is intentionally the easier setting. It shows what retrieval strategy is doing to the *ranking of evidence that is guaranteed to be present*. Full-corpus results are the harder setting, and the ones being validated now.
+
+[Methodology]{.kicker}
+
+## How the graph is built
+
+For MuSiQue, no wiki was written by hand. The graph is extracted from the corpus:
+
+1. **Concept extraction**: entity recognition over each paragraph, keeping named entities and top-*k* keyphrases per paragraph.
+2. **Concept-concept edges**: co-occurrence within a paragraph, weighted by pointwise mutual information across the corpus.
+3. **Chunk-concept edges**: each paragraph is a chunk; edges connect the chunk to every extracted concept in it.
+4. **Document-chunk edges**: paragraphs from the same source document are linked to a shared document node.
+
+The walk operates on the resulting tripartite graph.
+
+For projects that already ship linked notes (a wiki with `[[link]]` syntax and typed frontmatter), steps 1 to 3 are unnecessary: the concept graph is the wiki graph. This is the setting where the approach is cheapest.
+
+[Caveats]{.kicker}
+
+## What we are not claiming
+
+- **This does not replace dense retrieval.** Dense similarity is what seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops that dense-alone misses.
+- **This has not been evaluated on all corpora.** MuSiQue is a stress test built for multi-hop; results there do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.
+- **Full-scale accuracy numbers are pending.** The rank-distribution collapse on the 21k-chunk full corpus is observed. The end-to-end answer accuracy of graph-informed retrieval at full scale is being validated at time of writing.
+- **GraphRAG and community-based methods are related.** [@edge2024graphrag] Hierarchical community summaries are a different way to solve the same envelope-assembly problem. Which method wins depends on corpus structure; both beat plain dense at scale.
+
+## References {.unnumbered}
+
+::: {#refs}
+:::

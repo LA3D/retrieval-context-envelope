@@ -1,0 +1,214 @@
+/*-- scss:defaults --*/
+
+// Palette lifted from the WGRA talk deck (navy, gold, cream).
+$navy:        #14213d;
+$navy-deep:   #0d1a30;
+$gold:        #b8860b;
+$gold-light:  #d4a835;
+$cream:       #f8ecc9;
+$off-white:   #f5e6c8;
+$sky-muted:   #b8c5d3;
+$red:         #a13a30;
+$muted:       #5a5a5a;
+$card-bg:     #f4f2ec;
+$bg:          #ffffff;
+
+// Bootstrap variable overrides
+$body-bg: $bg;
+$body-color: #1f2328;
+$link-color: $gold;
+$primary: $navy;
+$headings-color: $navy;
+$headings-font-family: "Charter", "Palatino", "Cambria", "Georgia", serif;
+$font-family-sans-serif: "Helvetica Neue", "Arial", sans-serif;
+
+/*-- scss:rules --*/
+
+// Serif headings, sans body, consistent with WGRA deck.
+body {
+  font-family: "Helvetica Neue", "Arial", sans-serif;
+  line-height: 1.65;
+  color: #1f2328;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: "Charter", "Palatino", "Cambria", "Georgia", serif;
+  color: $navy;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+h1.title {
+  font-size: 2.4rem;
+  line-height: 1.1;
+  margin-bottom: 0.4em;
+}
+
+.subtitle, p.subtitle {
+  font-family: "Helvetica Neue", "Arial", sans-serif;
+  color: $muted;
+  font-weight: 400;
+  font-size: 1.15rem;
+  line-height: 1.4;
+}
+
+// Keep the main column comfortably readable.
+main.content, main#quarto-document-content {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+a {
+  color: $gold;
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
+// Kicker: uppercase gold tag above the section title.
+.kicker {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: $gold;
+  font-family: "Helvetica Neue", sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+  margin: 2em 0 0.4em;
+}
+
+// The core claim, styled as a cream callout with a gold border.
+.claim,
+blockquote.claim {
+  background: $cream;
+  border: 2px solid $gold;
+  border-radius: 6px;
+  padding: 1em 1.3em;
+  font-family: "Charter", "Palatino", "Cambria", "Georgia", serif;
+  font-style: italic;
+  font-size: 1.15rem;
+  line-height: 1.5;
+  color: $navy;
+  margin: 1.5em 0;
+
+  p { margin: 0; }
+  p + p { margin-top: 0.6em; }
+}
+
+// A quieter aside than the claim callout.
+.aside-note {
+  background: $card-bg;
+  border-left: 3px solid $muted;
+  padding: 0.6em 1em;
+  font-size: 0.95rem;
+  color: $muted;
+  margin: 1.2em 0;
+
+  p { margin: 0.3em 0; }
+}
+
+// Table styling: WGRA look, tabular numerals, red delta.
+table {
+  font-family: "Helvetica Neue", "Arial", sans-serif;
+  font-size: 0.95rem;
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+
+  th, td {
+    padding: 0.45em 0.7em;
+    border-bottom: 1px solid rgba(20, 33, 61, 0.15);
+    font-variant-numeric: tabular-nums;
+    text-align: left;
+  }
+  th {
+    color: $muted;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1.5px solid $navy;
+  }
+  td { color: #1f2328; }
+  td strong { color: $red; font-weight: 700; }
+  tbody tr:last-child td { border-bottom: none; }
+}
+
+// Iframe wrapper: keeps the animation constrained on wide screens
+// and lets it fill smaller viewports without overflow.
+.simulation-frame {
+  border: 1px solid rgba(20, 33, 61, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 1.5em 0;
+  background: #fafafa;
+
+  iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+  }
+
+  .simulation-caption {
+    font-size: 0.85rem;
+    color: $muted;
+    padding: 0.6em 1em;
+    background: $card-bg;
+    border-top: 1px solid rgba(20, 33, 61, 0.15);
+  }
+}
+
+// Section dividers: subtle centered flourish.
+.section-sep {
+  text-align: center;
+  color: $gold;
+  font-size: 1.4rem;
+  letter-spacing: 0.6em;
+  margin: 3em 0 1em;
+  opacity: 0.7;
+}
+
+// Two-column layout via .grid inside markdown.
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5em;
+  margin: 1em 0;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+// TOC hover state feels a bit brighter with gold.
+.sidebar nav[role="doc-toc"] a:hover,
+#TOC a:hover {
+  color: $gold;
+}
+
+// Code blocks: quieter background so prose leads.
+code {
+  background: rgba(20, 33, 61, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  color: $navy;
+  font-family: "Menlo", "Consolas", "Courier New", monospace;
+  font-size: 0.9em;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+}
+
+// Navbar polish.
+.navbar {
+  border-bottom: 3px solid $gold;
+}
+.navbar-brand, .nav-link { font-weight: 600; }
+
+// Footer polish.
+.page-footer, .nav-footer {
+  color: $sky-muted;
+  a { color: $gold; }
+}
