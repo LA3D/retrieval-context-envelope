@@ -187,8 +187,8 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
   <ul class="collapse">
   <li><a href="#dense-rag-on-the-full-21100-chunk-corpus" id="toc-dense-rag-on-the-full-21100-chunk-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-full-21100-chunk-corpus">Dense RAG on the full 21,100-chunk corpus</a></li>
   <li><a href="#dense-rag-on-the-281-chunk-gold-only-corpus" id="toc-dense-rag-on-the-281-chunk-gold-only-corpus" class="nav-link" data-scroll-target="#dense-rag-on-the-281-chunk-gold-only-corpus">Dense RAG on the 281-chunk gold-only corpus</a></li>
-  <li><a href="#k-30-coverage-on-the-full-21k" id="toc-k-30-coverage-on-the-full-21k" class="nav-link" data-scroll-target="#k-30-coverage-on-the-full-21k">K = 30 coverage on the full 21k</a></li>
-  <li><a href="#what-k-10-looks-like" id="toc-what-k-10-looks-like" class="nav-link" data-scroll-target="#what-k-10-looks-like">What K = 10 looks like</a></li>
+  <li><a href="#per-hop-coverage-at-production-k" id="toc-per-hop-coverage-at-production-k" class="nav-link" data-scroll-target="#per-hop-coverage-at-production-k">Per-hop coverage at production K</a></li>
+  <li><a href="#why-k-30-is-the-useful-ceiling" id="toc-why-k-30-is-the-useful-ceiling" class="nav-link" data-scroll-target="#why-k-30-is-the-useful-ceiling">Why K = 30 is the useful ceiling</a></li>
   </ul></li>
   <li><a href="#gold-only-dense-vs-graph-informed" id="toc-gold-only-dense-vs-graph-informed" class="nav-link" data-scroll-target="#gold-only-dense-vs-graph-informed">Gold-only: dense vs graph-informed</a></li>
   <li><a href="#the-one-open-comparison" id="toc-the-one-open-comparison" class="nav-link" data-scroll-target="#the-one-open-comparison">The one open comparison</a></li>
@@ -325,71 +325,104 @@ window.MathJax = { tex: { inlineMath: [['$','$'], ['\\(','\\)']] } };
 </table>
 <p>Reading the two tables together makes the shape unmistakable. <code>g_1</code> sits at rank 1 in both corpora, at every hop count: the chunk that directly matches the question’s named entity is trivial for cosine. The deeper gold chunks are the ones that move. On 281 chunks, <code>g_4</code> for a 4-hop question sits at median 30, entirely usable. On 21,100 chunks, the same <code>g_4</code> sinks to median <strong>1,796</strong> with a p75 of <strong>3,027</strong>. First hop is not the problem. The problem is every gold chunk after the first, scaled against realistic distractors.</p>
 </section>
-<section id="k-30-coverage-on-the-full-21k" class="level3">
-<h3 class="anchored" data-anchor-id="k-30-coverage-on-the-full-21k">K = 30 coverage on the full 21k</h3>
-<p><code>all-gold@K</code> is the fraction of questions whose <em>every</em> gold chunk survives inside the top-K.</p>
+<section id="per-hop-coverage-at-production-k" class="level3">
+<h3 class="anchored" data-anchor-id="per-hop-coverage-at-production-k">Per-hop coverage at production K</h3>
+<p>The rank medians turn into a concrete “what does the language model actually see?” table if you count, for each <code>g_i</code>, the fraction of questions where that gold chunk lands inside the top K. This is the useful metric. Numbers below are computed directly from <code>cache/p3v5/vanilla_dense_21k.json</code>, TEST split, 30 questions per hop group.</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">
-<th>K</th>
-<th style="text-align: right;">% corpus</th>
-<th style="text-align: right;">all-gold</th>
+<th>Hop group</th>
+<th>Slot</th>
+<th style="text-align: right;">K = 5</th>
+<th style="text-align: right;">K = 10</th>
+<th style="text-align: right;">K = 30</th>
+<th style="text-align: right;">K = 100</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
-<td>5</td>
-<td style="text-align: right;">0.0 %</td>
-<td style="text-align: right;">3.3 %</td>
+<td>2-hop</td>
+<td>g1</td>
+<td style="text-align: right;">93 %</td>
+<td style="text-align: right;">100 %</td>
+<td style="text-align: right;">100 %</td>
+<td style="text-align: right;">100 %</td>
 </tr>
 <tr class="even">
-<td>30</td>
-<td style="text-align: right;">0.1 %</td>
-<td style="text-align: right;"><strong>22.2 %</strong></td>
+<td>2-hop</td>
+<td>g2</td>
+<td style="text-align: right;">10 %</td>
+<td style="text-align: right;">17 %</td>
+<td style="text-align: right;">43 %</td>
+<td style="text-align: right;">43 %</td>
 </tr>
 <tr class="odd">
-<td>100</td>
-<td style="text-align: right;">0.5 %</td>
-<td style="text-align: right;">32.2 %</td>
+<td>3-hop</td>
+<td>g1</td>
+<td style="text-align: right;">93 %</td>
+<td style="text-align: right;">97 %</td>
+<td style="text-align: right;">100 %</td>
+<td style="text-align: right;">100 %</td>
 </tr>
 <tr class="even">
-<td>200</td>
-<td style="text-align: right;">0.9 %</td>
-<td style="text-align: right;">47.8 %</td>
+<td>3-hop</td>
+<td>g2</td>
+<td style="text-align: right;">20 %</td>
+<td style="text-align: right;">37 %</td>
+<td style="text-align: right;">60 %</td>
+<td style="text-align: right;">87 %</td>
 </tr>
 <tr class="odd">
-<td>500</td>
-<td style="text-align: right;">2.4 %</td>
-<td style="text-align: right;">54.4 %</td>
+<td>3-hop</td>
+<td>g3</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">23 %</td>
+<td style="text-align: right;">47 %</td>
 </tr>
 <tr class="even">
-<td>1000</td>
-<td style="text-align: right;">4.7 %</td>
-<td style="text-align: right;">65.6 %</td>
+<td>4-hop</td>
+<td>g1</td>
+<td style="text-align: right;">83 %</td>
+<td style="text-align: right;">87 %</td>
+<td style="text-align: right;">97 %</td>
+<td style="text-align: right;">97 %</td>
 </tr>
 <tr class="odd">
-<td>2000</td>
-<td style="text-align: right;">9.5 %</td>
-<td style="text-align: right;">76.7 %</td>
+<td>4-hop</td>
+<td>g2</td>
+<td style="text-align: right;">20 %</td>
+<td style="text-align: right;">23 %</td>
+<td style="text-align: right;">40 %</td>
+<td style="text-align: right;">60 %</td>
 </tr>
 <tr class="even">
-<td>5000</td>
-<td style="text-align: right;">23.7 %</td>
-<td style="text-align: right;">93.3 %</td>
+<td>4-hop</td>
+<td>g3</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">3 %</td>
+<td style="text-align: right;">13 %</td>
+<td style="text-align: right;">37 %</td>
+</tr>
+<tr class="odd">
+<td>4-hop</td>
+<td>g4</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">7 %</td>
 </tr>
 </tbody>
 </table>
-<p>You would need to feed the language model roughly 2,000 chunks to cover every gold chunk for 77 % of questions. This is what “dense RAG is broken on multi-hop at scale” means as a concrete claim.</p>
+<p>The story reads across the table in two directions. Down each K column: <code>g_1</code> always survives, and the coverage of every deeper slot collapses. Along each row from left to right: raising K helps the middle slots but does not touch the tail. <strong>4-hop <code>g_4</code> is a zero at K = 30 and only 7 % at K = 100.</strong> That is what “dense at scale cannot rank the deep chunks” means concretely; it is not that they are missing from the corpus, it is that dense sorts them into the thousands.</p>
+<div class="aside-note">
+<p>Why not headline <code>all-gold@K</code>? Because it is a strict-necessity metric (every gold chunk inside K, else the question is a miss) and it hides where the collapse actually happens. “22 % at K = 30” reads as “the retriever is a bit weak” and quietly gets discounted for “surely the LLM can guess with most of the chunks.” The per-hop table above says the same thing without letting the reader off the hook: the deep chunks are <em>nowhere</em> inside K.</p>
+</div>
 </section>
-<section id="what-k-10-looks-like" class="level3">
-<h3 class="anchored" data-anchor-id="what-k-10-looks-like">What K = 10 looks like</h3>
-<p><code>K = 10</code> is the practical production cutoff once you factor in <em>lost-in-the-middle</em> <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span>. The rank medians above translate to K = 10 coverage as follows:</p>
-<ul>
-<li><strong>2-hop g2</strong>: median 143. Landing inside K = 10 for roughly 10 to 15 % of questions.</li>
-<li><strong>3-hop g3</strong>: median 101. Landing inside K = 10 for roughly 5 % of questions.</li>
-<li><strong>4-hop g4</strong>: median 1,796. Effectively never inside K = 10.</li>
-</ul>
-<p>So at the K the attention curve actually lets you use, dense RAG hands the language model one gold chunk of four for a 4-hop question, and misses the bridge chunk for the vast majority of 2-hop questions. Turning K up past 30 does not fix it, because 30 is where the middle-of-context attention penalty starts eating into answer quality faster than recall improves.</p>
+<section id="why-k-30-is-the-useful-ceiling" class="level3">
+<h3 class="anchored" data-anchor-id="why-k-30-is-the-useful-ceiling">Why K = 30 is the useful ceiling</h3>
+<p><em>Lost-in-the-middle</em> <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> shows a U-shaped attention curve: language models attend well to the start and end of a long context and poorly to the middle. The penalty is measurable across both open-source and commercial models, and it gets worse with longer contexts. K = 30 is roughly the point where the middle-position penalty starts costing more accuracy than the extra recall buys back. Above K = 30 you are trading retriever recall against the model’s ability to use what you retrieved.</p>
+<p>K = 10 is the production cutoff most systems settle at because it sits under the U-curve entirely: every chunk is at a position the model attends to well. The modern pattern is <em>retrieve K = 50-100 with a cheap dense/BM25 hybrid, then rerank down to K = 5-10 with a cross-encoder</em>, which lets you use retriever recall without paying the attention penalty. The rerank step helps recover shallow multi-hop chunks (the 2-hop <code>g_2</code> in the table above) but cannot recover chunks that are outside the initial K = 100 candidate pool. Look at 4-hop <code>g_4</code> (7 % at K = 100) and 4-hop <code>g_3</code> (37 % at K = 100). Reranking cannot save what dense retrieval never surfaced.</p>
 <p><span class="kicker">Comparison</span></p>
 </section>
 </section>

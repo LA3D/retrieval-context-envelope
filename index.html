@@ -328,12 +328,46 @@ window.Quarto = {
 <h3 class="anchored" data-anchor-id="the-k-question-sharpens-this">The K question sharpens this</h3>
 <p>Two constants set the operating envelope:</p>
 <ul>
-<li><strong>K = 30</strong> is roughly the ceiling before <em>lost-in-the-middle</em> effects <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> start eating into answer quality. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. Push K above 30 and you gain recall at the cost of the model actually using what you retrieved.</li>
-<li><strong>K = 10</strong> is the more common production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the model attends to.</li>
+<li><strong>K = 10</strong> is the modal production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the language model actually attends to. This is the number to design against.</li>
+<li><strong>K = 30</strong> is the <em>upper bound</em>, the point at which <em>lost-in-the-middle</em> effects <span class="citation" data-cites="liu2023lostmiddle">(<a href="#ref-liu2023lostmiddle" role="doc-biblioref">Liu et al., 2024</a>)</span> start eating into answer quality faster than extra recall helps. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. This ceiling matters because it closes the escape hatch of “just retrieve more.”</li>
 </ul>
-<p>At <strong>K = 30</strong>, MuSiQue’s <code>all-gold@30</code> is <strong>22 %</strong> on the 21k corpus. Every gold chunk survives inside the top 30 for one question in five. To hit 77 %, you would have to feed the language model roughly 2,000 chunks per question. That is well past the practical ceiling on any current model.</p>
-<p>At <strong>K = 10</strong>, the picture is sharper. The direct-match chunk is essentially always there. The 2-hop bridge chunk (median rank 143) lands inside K = 10 for maybe 10 to 15 % of questions. The 4-hop deepest chunk (median rank 1,796) effectively never does. Dense retrieval at K = 10 gives the language model one out of four required gold chunks for a 4-hop question, and the model cannot answer without the other three. Turning K up past 30 does not fix it because the attention penalty grows faster than recall improves.</p>
-<p>The gap is not a coverage bug. It is a ranking gap: the deep chunks are in the corpus, dense retrieval just does not rank them near the top.</p>
+<p>What the language model actually sees at K = 10 on the 21k corpus, per hop group (fraction of TEST questions whose slot-<code>i</code> gold chunk lands inside the top 10):</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Hop group</th>
+<th style="text-align: right;">g1</th>
+<th style="text-align: right;">g2</th>
+<th style="text-align: right;">g3</th>
+<th style="text-align: right;">g4</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>2-hop</td>
+<td style="text-align: right;">100 %</td>
+<td style="text-align: right;">17 %</td>
+<td style="text-align: right;"></td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="even">
+<td>3-hop</td>
+<td style="text-align: right;">97 %</td>
+<td style="text-align: right;">37 %</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;"></td>
+</tr>
+<tr class="odd">
+<td>4-hop</td>
+<td style="text-align: right;">87 %</td>
+<td style="text-align: right;">23 %</td>
+<td style="text-align: right;">3 %</td>
+<td style="text-align: right;">0 %</td>
+</tr>
+</tbody>
+</table>
+<p>The direct-match chunk is essentially always in front of the model. Everything else drops off a cliff. For a 4-hop question, the model receives <code>g_1</code> in 87 % of cases and effectively nothing else; the deepest chunk (<code>g_4</code>) lands inside K = 10 for zero out of thirty questions.</p>
+<p>Raising to K = 30 recovers some middle chunks but does not touch the tail: 4-hop <code>g_3</code> climbs to 13 %, 4-hop <code>g_4</code> stays at <strong>0 %</strong>. Even at K = 100, 4-hop <code>g_4</code> is only <strong>7 %</strong>. This is the shape that matters. The failure is not a coverage bug you can fix by turning K up. It is a ranking failure: the deep chunks are in the corpus, and dense retrieval sorts them far below the direct-match. See the <a href="./appendix.html">data appendix</a> for the full K = 5 / 10 / 30 / 100 sweep.</p>
 <p><span class="kicker">On terminology</span></p>
 </section>
 </section>
