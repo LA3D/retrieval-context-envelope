@@ -220,6 +220,7 @@ window.Quarto = {
   </ul></li>
   <li><a href="#entity-similarity-as-a-surrogate-for-entity-resolution" id="toc-entity-similarity-as-a-surrogate-for-entity-resolution" class="nav-link" data-scroll-target="#entity-similarity-as-a-surrogate-for-entity-resolution">Entity similarity as a surrogate for entity resolution</a></li>
   <li><a href="#what-this-changes" id="toc-what-this-changes" class="nav-link" data-scroll-target="#what-this-changes">What this changes</a></li>
+  <li><a href="#evidence-based-reasoning-is-envelope-assembly" id="toc-evidence-based-reasoning-is-envelope-assembly" class="nav-link" data-scroll-target="#evidence-based-reasoning-is-envelope-assembly">Evidence-based reasoning is envelope assembly</a></li>
   <li><a href="#what-to-do-with-all-this" id="toc-what-to-do-with-all-this" class="nav-link" data-scroll-target="#what-to-do-with-all-this">What to do with all this</a></li>
   <li><a href="#where-to-go-from-here" id="toc-where-to-go-from-here" class="nav-link" data-scroll-target="#where-to-go-from-here">Where to go from here</a></li>
   <li><a href="#how-the-k-10-coverage-numbers-were-produced" id="toc-how-the-k-10-coverage-numbers-were-produced" class="nav-link" data-scroll-target="#how-the-k-10-coverage-numbers-were-produced">How the K = 10 coverage numbers were produced</a></li>
@@ -442,6 +443,20 @@ window.Quarto = {
 <li>Treat retrieval as a two-step: assemble the envelope in graph space (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.</li>
 </ul>
 <p>This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.</p>
+<p><span class="kicker">For scientific work</span></p>
+</section>
+<section id="evidence-based-reasoning-is-envelope-assembly" class="level2">
+<h2 class="anchored" data-anchor-id="evidence-based-reasoning-is-envelope-assembly">Evidence-based reasoning is envelope assembly</h2>
+<p>The “small corpus, single-hop” carve-out later on is a real case. It does not describe scientific work.</p>
+<p>A scientific claim is not answered by a chunk; it is <em>supported</em> by one. Answering “was gene X shown to affect phenotype Y?” is not “find the sentence that says so.” It is finding the primary paper, its methods, its sample size, its dataset, any preprint or replication attempt, and the chunks in citing papers that agree or disagree. Evidence-based reasoning is multi-source by construction, which makes evidence-based retrieval multi-hop by construction.</p>
+<p>Four shapes that put a research corpus in the envelope regime the moment it exists:</p>
+<ul>
+<li><strong>A claim needs provenance.</strong> The chunk stating a finding and the chunk describing how it was measured are different chunks, sometimes in different sections of the same paper, often in different documents (paper, supplementary, preprint, dataset paper).</li>
+<li><strong>Replication is a citation walk.</strong> “Has this been replicated?” is a question about the citation graph. Dense similarity does not encode citations.</li>
+<li><strong>Method reuse crosses papers.</strong> “What else uses this assay?” links chunks that share a method entity, not chunks that share topic words.</li>
+<li><strong>Datasets are cited, not embedded.</strong> Modern papers depend on datasets described elsewhere. Retrieving an analysis without the dataset description retrieves incomplete evidence.</li>
+</ul>
+<p>A 500-paper reference library is 5,000 to 10,000 chunks, and every question against it carries an implicit evidence chain whether the user articulates it or not. Single-hop is not a scientific way of asking questions. If you are building RAG over a research corpus, the failure table above is the ordinary operating regime, not a distant edge case.</p>
 <p><span class="kicker">Practical takeaways</span></p>
 </section>
 <section id="what-to-do-with-all-this" class="level2">
