@@ -214,12 +214,12 @@ window.Quarto = {
   <ul>
   <li><a href="#dense-rag-at-k-10" id="toc-dense-rag-at-k-10" class="nav-link active" data-scroll-target="#dense-rag-at-k-10">Dense RAG at K = 10</a></li>
   <li><a href="#two-kinds-of-hop" id="toc-two-kinds-of-hop" class="nav-link" data-scroll-target="#two-kinds-of-hop">Two kinds of “hop”</a></li>
-  <li><a href="#retrieval-as-a-trajectory" id="toc-retrieval-as-a-trajectory" class="nav-link" data-scroll-target="#retrieval-as-a-trajectory">Retrieval as a trajectory</a>
+  <li><a href="#retrieval-as-a-trajectory-in-graph-space" id="toc-retrieval-as-a-trajectory-in-graph-space" class="nav-link" data-scroll-target="#retrieval-as-a-trajectory-in-graph-space">Retrieval as a trajectory in graph space</a>
   <ul class="collapse">
   <li><a href="#why-the-walk-happens-before-the-question-arrives" id="toc-why-the-walk-happens-before-the-question-arrives" class="nav-link" data-scroll-target="#why-the-walk-happens-before-the-question-arrives">Why the walk happens <em>before</em> the question arrives</a></li>
   </ul></li>
+  <li><a href="#entity-similarity-as-a-surrogate-for-entity-resolution" id="toc-entity-similarity-as-a-surrogate-for-entity-resolution" class="nav-link" data-scroll-target="#entity-similarity-as-a-surrogate-for-entity-resolution">Entity similarity as a surrogate for entity resolution</a></li>
   <li><a href="#what-this-changes" id="toc-what-this-changes" class="nav-link" data-scroll-target="#what-this-changes">What this changes</a></li>
-  <li><a href="#operator-splitting" id="toc-operator-splitting" class="nav-link" data-scroll-target="#operator-splitting">Operator splitting</a></li>
   <li><a href="#what-to-do-with-all-this" id="toc-what-to-do-with-all-this" class="nav-link" data-scroll-target="#what-to-do-with-all-this">What to do with all this</a></li>
   <li><a href="#where-to-go-from-here" id="toc-where-to-go-from-here" class="nav-link" data-scroll-target="#where-to-go-from-here">Where to go from here</a></li>
   <li><a href="#how-the-k-10-coverage-numbers-were-produced" id="toc-how-the-k-10-coverage-numbers-were-produced" class="nav-link" data-scroll-target="#how-the-k-10-coverage-numbers-were-produced">How the K = 10 coverage numbers were produced</a></li>
@@ -393,49 +393,55 @@ window.Quarto = {
 </div>
 <p><span class="kicker">The mechanism</span></p>
 </section>
-<section id="retrieval-as-a-trajectory" class="level2">
-<h2 class="anchored" data-anchor-id="retrieval-as-a-trajectory">Retrieval as a trajectory</h2>
-<p>The alternative to “one query, top-K by similarity” is “walk the graph.” The graph can be deliberately austere: two node types, chunks and canonical entities extracted from those chunks, with edges weighted by how often each entity occurs inside each chunk. No chunk-chunk edges, no entity-entity edges. Once the graph exists, a <strong>random walk with restart</strong> gives you a stationary distribution that captures where information <em>tends to cluster</em>:</p>
+<section id="retrieval-as-a-trajectory-in-graph-space" class="level2">
+<h2 class="anchored" data-anchor-id="retrieval-as-a-trajectory-in-graph-space">Retrieval as a trajectory in graph space</h2>
+<p>The shift from dense RAG to graph-informed retrieval is a shift of the space the retriever works in.</p>
+<p>Dense retrieval lives in <strong>document space</strong>. Every chunk is a point on a continuous embedding manifold, and “close” means small cosine distance along that manifold. When the manifold happens to align with the reasoning structure the answer needs, this works. When the answer chain requires connecting two chunks that use different surface language to describe the same underlying thing, the manifold cannot help. The chunks are far apart in embedding space because their tokens differ, and cosine has no memory of the corpus-level relationships that would tell you otherwise.</p>
+<p>Graph-informed retrieval lives in <strong>graph space</strong>. Nodes are chunks and the entities extracted from those chunks. Edges are structural: a chunk is linked to every entity that appears in it. Two chunks are “close” not because their surface tokens are similar but because they mention the same entities. Retrieval becomes a walk on this discrete structure. The relationships the embedding did not encode are the edges the walk follows.</p>
+<p>Formally, a <strong>random walk with restart</strong> produces a stationary distribution over the graph:</p>
 <p><span class="math display">\[
 \boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}
 \]</span></p>
-<p>The walker restarts at a seed node with probability <span class="math inline">\(c\)</span>, otherwise it follows an outbound edge, and it repeats until the distribution <span class="math inline">\(\boldsymbol{\pi}\)</span> stops moving. The result is a personalized-PageRank score over the whole graph, one score per node, telling you how much local neighborhood a node absorbs from the seed.</p>
+<p>The walker restarts at a seed distribution <span class="math inline">\(\boldsymbol{\pi}_0\)</span> with probability <span class="math inline">\(c\)</span>, otherwise follows an outbound edge, and iterates until <span class="math inline">\(\boldsymbol{\pi}\)</span> stops moving. The result is a personalized-PageRank score over every node, telling you how much neighborhood a node absorbs from the seed. This is a <em>local</em> computation in graph space in the same way a top-K cosine query is a <em>local</em> computation in document space: both surface the neighborhood near a probe, but they measure the neighborhood on completely different structures.</p>
 <p>The animation below runs this. Yellow nodes are the seed set; darker nodes have accumulated more probability mass through the walk; the graph structure controls where the mass ends up.</p>
 <div class="simulation-frame">
 <iframe src="assets/rwr_animation.html" height="620" title="Random-walk-with-restart simulation">
 </iframe>
 <div class="simulation-caption">
-<p>Live simulation by Priscila Moreira. Refresh the page or click a node to reseed. What matters visually: mass flows along dense sub-graphs, and short paths through concept edges pull mass across document boundaries that similarity search would treat as unrelated.</p>
+<p>Live simulation by Priscila Moreira. Refresh the page or click a node to reseed. What matters visually: mass flows along dense sub-graphs, and short paths through shared entities pull mass across document boundaries that similarity search would treat as unrelated.</p>
 </div>
 </div>
 <section id="why-the-walk-happens-before-the-question-arrives" class="level3">
 <h3 class="anchored" data-anchor-id="why-the-walk-happens-before-the-question-arrives">Why the walk happens <em>before</em> the question arrives</h3>
-<p>The RWR is not run at query time. The stationary distribution is computed once, offline, and cached. When a question comes in, the retrieval step is:</p>
+<p>The RWR is not run at query time. The stationary distribution is computed once, offline, and cached against the corpus. When a question comes in, the retrieval step is:</p>
 <ol type="1">
-<li>Use similarity to identify a small seed set of chunks or concepts related to the question.</li>
-<li>Read off the pre-computed walk-informed neighborhood around that seed.</li>
+<li>Seed a distribution <span class="math inline">\(\boldsymbol{\pi}_0\)</span> from the question.</li>
+<li>Read off the walk-informed neighborhood around that seed.</li>
 <li>Re-rank the neighborhood locally against the question.</li>
 </ol>
-<p>This is why “just decompose the question” is not a substitute. The graph structure that the walk discovered is already there. The question is used to <em>choose which walk-informed neighborhood to pull</em>, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.</p>
-<p><span class="kicker">Why the framing matters</span></p>
+<p>This is why “just decompose the question” is not a substitute. The graph the walk discovered is already there. The question is used to <em>choose which walk-informed neighborhood to pull</em>, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.</p>
+<p><span class="kicker">Concepts as closeness</span></p>
 </section>
+</section>
+<section id="entity-similarity-as-a-surrogate-for-entity-resolution" class="level2">
+<h2 class="anchored" data-anchor-id="entity-similarity-as-a-surrogate-for-entity-resolution">Entity similarity as a surrogate for entity resolution</h2>
+<p>If graph edges are what make retrieval work, the graph has to encode conceptual closeness somehow. Two chunks that discuss the same underlying thing should be linked even when they use different surface words for it.</p>
+<p>The classical way to do this is <strong>entity resolution</strong>: cluster every surface mention of “Barack Obama,” “President Obama,” and “Obama” into one canonical entity node. Do this hard-clustering step across the whole corpus, once, and now chunks about the same entity share a graph neighbor no matter which surface form they use.</p>
+<p>Entity resolution is expensive, brittle, and rarely worth it at scale. It requires a global pass, disambiguation rules, and re-runs whenever the corpus changes. What we do instead is skip the hard clustering and let the <strong>initial conditions do the resolution work</strong>.</p>
+<p>The entity layer of the graph keeps surface forms distinct: “Barack Obama,” “President Obama,” and “Obama” are separate nodes. The seed distribution <span class="math inline">\(\boldsymbol{\pi}_0\)</span> is a softmax over question-vs-entity similarity, computed against every entity label the corpus contains. A question about the Obama administration seeds mass across every surface form of Obama at once, weighted by how close each label sits to the question in embedding space. The walk propagates that mass along chunk-entity edges, and mass accumulates at chunks that any of the seeded surface forms can reach.</p>
+<p>Entities that mean the same thing get similarly seeded, and they reach similar chunk neighborhoods through the walk. Entities that share nothing but a surface token (Washington the person vs Washington the state) get seeded together only if the question is genuinely ambiguous, and the walk pulls them into separate neighborhoods. The soft resolution happens at query time, driven by the question, without ever committing to a hard clustering the corpus may not support.</p>
+<p>This is what “entity similarity as initial conditions” means concretely, and it is what makes the approach cheap to deploy: no preprocessing pass over the corpus, no per-domain disambiguation rules, no re-runs when new documents arrive.</p>
+<p><span class="kicker">Why the framing matters</span></p>
 </section>
 <section id="what-this-changes" class="level2">
 <h2 class="anchored" data-anchor-id="what-this-changes">What this changes</h2>
 <p>The failure table above says nothing about whether <em>any</em> graph-informed retriever solves the problem in practice. That is an empirical question with an empirical answer, and it is a follow-up. What the framing changes is what you are looking for when you build a retriever in the first place.</p>
 <ul>
 <li>Stop optimizing embeddings. <code>g_1</code> is at rank 1 for every hop count already. Another point of MTEB is not going to move the 4-hop <code>g_4</code> from rank 1,796 to rank 10.</li>
-<li>Start thinking about the graph the evidence actually lives on. If the corpus has links (wikis, citations, typed frontmatter) the graph is free. If it does not, an entity layer is a cheap substitute.</li>
-<li>Treat retrieval as a two-step: assemble the envelope on the graph (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.</li>
+<li>Start thinking about the graph the evidence lives on. Wikis and citation networks give you one for free. Corpora that do not come with links get an entity layer, and question-seeded walks over that layer substitute for hard entity resolution.</li>
+<li>Treat retrieval as a two-step: assemble the envelope in graph space (offline, once), then re-rank the envelope against the question (online, per query). Question decomposition composes with this at the second step; it does not replace it.</li>
 </ul>
 <p>This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.</p>
-<p><span class="kicker">Deeper</span></p>
-</section>
-<section id="operator-splitting" class="level2">
-<h2 class="anchored" data-anchor-id="operator-splitting">Operator splitting</h2>
-<p>The RWR update <span class="math inline">\(\boldsymbol{\pi} = c \cdot \boldsymbol{\pi}_0 + (1 - c) \cdot \mathbf{P}^{\top} \boldsymbol{\pi}\)</span> is a fixed-point iteration for a linear operator: a convex combination of the restart operator (which localizes) and the transition operator (which diffuses). This is a Douglas-Rachford-style split, and it lets you reason about which corpus properties affect which operator. Restart probability controls how far the mass travels from the seed before restarting; edge structure controls what the diffusion looks like when it does travel.</p>
-<p>The practical upshot: tuning the retrieval is not a matter of picking a better embedding. It is a matter of adjusting the two operators. Restart up if the walk is drifting too far. Add edges if the mass is not reaching the neighborhoods where the evidence lives.</p>
-<p>More on this in follow-up notes as the theory gets written up.</p>
 <p><span class="kicker">Practical takeaways</span></p>
 </section>
 <section id="what-to-do-with-all-this" class="level2">
