@@ -1,7 +1,0 @@
-/_site/
-/.quarto/
-*.rmarkdown
-.DS_Store
-.Rproj.user
-
-**/*.quarto_ipynb

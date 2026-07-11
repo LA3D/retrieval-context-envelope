@@ -1,0 +1,121 @@
+[
+  {
+    "objectID": "appendix.html",
+    "href": "appendix.html",
+    "title": "Data appendix",
+    "section": "",
+    "text": "This page is the empirical backing for the landing page. It is versioned alongside the code that produces the numbers. If a value changes on re-run, the value here changes, and the commit history records why. Values marked in progress are pending on runs that have not completed at the time of writing.\nSetup"
+  },
+  {
+    "objectID": "appendix.html#the-corpus",
+    "href": "appendix.html#the-corpus",
+    "title": "Data appendix",
+    "section": "The corpus",
+    "text": "The corpus\nThe evaluation runs on MuSiQue (Trivedi et al., 2022), a multi-hop question-answering benchmark constructed by chaining single-hop questions from SQuAD, T-REx, Zero Shot RE, Natural Questions, and MLQA. The version used here is the answerable split (2-, 3-, and 4-hop questions with grounded supporting evidence).\n\nFull corpus: on the order of 21,000 candidate paragraphs across all questions.\nGold-only subset: 281 questions, restricted to the paragraphs that contain the supporting evidence. This isolates the retrieval-ranking problem from the recall problem.\nHeld-out test set: 90 questions used for end-to-end answer quality.\n\nRank distribution"
+  },
+  {
+    "objectID": "appendix.html#where-do-the-supporting-chunks-land",
+    "href": "appendix.html#where-do-the-supporting-chunks-land",
+    "title": "Data appendix",
+    "section": "Where do the supporting chunks land?",
+    "text": "Where do the supporting chunks land?\nDense retrieval on the full 21k-chunk corpus produces a rank for every candidate chunk. For each MuSiQue question, we can ask: what rank does the model assign to the chunk that supports the n-th reasoning hop?\nThe table below is the shape of that finding. First-hop supporting chunks are usually retrievable at production-scale K. Deeper hops drift toward the tail of the distribution.\n\n\n\nHop\nMean rank of supporting chunk\nWithin K = 10\nWithin K = 30\n\n\n\n\n1\nin progress\nin progress\nin progress\n\n\n2\nin progress\nin progress\nin progress\n\n\n3\nin progress\nin progress\nin progress\n\n\n4\nin progress\nin progress\nin progress\n\n\n\n\nNumbers are being validated on the full 21k corpus at the time of writing. The qualitative shape (rank rising monotonically with hop depth, most 3rd- and 4th-hop chunks outside K = 30) is stable across pilot runs. Point estimates are refreshed here as final runs complete.\n\nThe value of the table is not any single point estimate. It is the pattern: a common production cutoff of K = 10 does not include the supporting evidence for most reasoning-hop-3 and reasoning-hop-4 chunks. Even K = 30, near the lost-in-the-middle ceiling (Liu et al., 2024), does not close the gap.\nComparison"
+  },
+  {
+    "objectID": "appendix.html#gold-only-dense-vs-graph-informed",
+    "href": "appendix.html#gold-only-dense-vs-graph-informed",
+    "title": "Data appendix",
+    "section": "Gold-only: dense vs graph-informed",
+    "text": "Gold-only: dense vs graph-informed\nThe gold-only subset lets us compare two retrieval strategies without the recall confound. Both strategies see the same paragraphs; the only difference is how they rank them.\n\nDense: cosine similarity between question embedding and paragraph embeddings, single-shot.\nGraph-informed: RWR-based re-ranking against a graph built from the corpus. Nodes are chunks, concepts, and documents; edges come from co-occurring concepts, document layout, and (where present) cross-document links. Restart probability and edge weights are tuned on a development split.\n\n\n\n\nMetric\nDense\nGraph-informed\n\n\n\n\nAnswer accuracy (gold-only)\nin progress\nin progress\n\n\nMean rank of hop-2 support\nin progress\nin progress\n\n\nMean rank of hop-3 support\nin progress\nin progress\n\n\nMean rank of hop-4 support\nin progress\nin progress\n\n\n\nThe gold-only comparison is intentionally the easier setting. It shows what retrieval strategy is doing to the ranking of evidence that is guaranteed to be present. Full-corpus results are the harder setting, and the ones being validated now.\nMethodology"
+  },
+  {
+    "objectID": "appendix.html#how-the-graph-is-built",
+    "href": "appendix.html#how-the-graph-is-built",
+    "title": "Data appendix",
+    "section": "How the graph is built",
+    "text": "How the graph is built\nFor MuSiQue, no wiki was written by hand. The graph is extracted from the corpus:\n\nConcept extraction: entity recognition over each paragraph, keeping named entities and top-k keyphrases per paragraph.\nConcept-concept edges: co-occurrence within a paragraph, weighted by pointwise mutual information across the corpus.\nChunk-concept edges: each paragraph is a chunk; edges connect the chunk to every extracted concept in it.\nDocument-chunk edges: paragraphs from the same source document are linked to a shared document node.\n\nThe walk operates on the resulting tripartite graph.\nFor projects that already ship linked notes (a wiki with [[link]] syntax and typed frontmatter), steps 1 to 3 are unnecessary: the concept graph is the wiki graph. This is the setting where the approach is cheapest.\nCaveats"
+  },
+  {
+    "objectID": "appendix.html#what-we-are-not-claiming",
+    "href": "appendix.html#what-we-are-not-claiming",
+    "title": "Data appendix",
+    "section": "What we are not claiming",
+    "text": "What we are not claiming\n\nThis does not replace dense retrieval. Dense similarity is what seeds the walk. The claim is that walk-informed re-ranking closes the gap on hops that dense-alone misses.\nThis has not been evaluated on all corpora. MuSiQue is a stress test built for multi-hop; results there do not automatically generalize to single-hop domains or to corpora where evidence is not graph-structured.\nFull-scale accuracy numbers are pending. The rank-distribution collapse on the 21k-chunk full corpus is observed. The end-to-end answer accuracy of graph-informed retrieval at full scale is being validated at time of writing.\nGraphRAG and community-based methods are related. (Edge et al., 2024) Hierarchical community summaries are a different way to solve the same envelope-assembly problem. Which method wins depends on corpus structure; both beat plain dense at scale."
+  },
+  {
+    "objectID": "appendix.html#references",
+    "href": "appendix.html#references",
+    "title": "Data appendix",
+    "section": "References",
+    "text": "References\n\n\nEdge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., Truitt, S., & Larson, J. (2024). From local to global: A graph RAG approach to query-focused summarization. arXiv Preprint arXiv:2404.16130.\n\n\nLiu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2024). Lost in the middle: How language models use long contexts. Transactions of the Association for Computational Linguistics, 12, 157–173. https://doi.org/10.1162/tacl_a_00638\n\n\nTrivedi, H., Balasubramanian, N., Khot, T., & Sabharwal, A. (2022). MuSiQue: Multihop questions via single-hop question composition. Transactions of the Association for Computational Linguistics, 10, 539–554. https://doi.org/10.1162/tacl_a_00475"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Retrieval as trajectory",
+    "section": "",
+    "text": "The claim\nThe rest of this page unpacks what that means, why it matters, and what an alternative looks like. The data appendix has the underlying rank tables and methodology.\nThe failure mode"
+  },
+  {
+    "objectID": "index.html#dense-rag-at-scale",
+    "href": "index.html#dense-rag-at-scale",
+    "title": "Retrieval as trajectory",
+    "section": "Dense RAG at scale",
+    "text": "Dense RAG at scale\nDense retrieval on a modest corpus, of order a thousand chunks, and a question that needs one chunk to answer, is very good. It is the case most public benchmarks are built around, and it is the case the “just do RAG” advice was written for.\nMulti-hop QA at scale is a different problem. MuSiQue (Trivedi et al., 2022) provides a stress test: about 21,000 candidate chunks, questions that require chaining evidence across two, three, or four documents, and a rank distribution that gets qualitatively worse the further along the chain you go. First-hop chunks are usually retrievable at reasonable K. Second-hop chunks are less so. By the fourth hop, dense similarity is essentially ranking chunks the way it would rank random documents from the corpus.\nThis is not a claim about dense retrieval being bad. It is a claim about what dense retrieval is for. It is a one-shot query against a similarity manifold. If the answer lives one hop away in similarity space, it finds it. If the answer lives across a graph that the embedding does not encode, it cannot.\n\nThe K question\nTwo constants set the operating envelope:\n\nK = 30 is roughly the ceiling before lost-in-the-middle effects (Liu et al., 2024) start eating into answer quality. The U-shaped attention curve means chunks in positions 10 to 20 of a 30-chunk context are systematically harder for the model to use than chunks at the ends. Push K above 30 and you gain recall at the cost of the model actually using what you retrieved.\nK = 10 is the more common production cutoff. It keeps latency and cost down and it puts every retrieved chunk in a position the model attends to.\n\nNeither cutoff is generous enough for a corpus of tens of thousands of chunks with multi-hop questions. Not because the retrieval is bad; because the envelope the model needs is spread across more chunks than K can hold.\nOn terminology"
+  },
+  {
+    "objectID": "index.html#two-kinds-of-hop",
+    "href": "index.html#two-kinds-of-hop",
+    "title": "Retrieval as trajectory",
+    "section": "Two kinds of “hop”",
+    "text": "Two kinds of “hop”\nA lot of confusion in the multi-hop literature is because the word “hop” is doing two different jobs.\nReasoning-hops are a property of the question. How many inference steps does the question demand? “What year was the director of Blade Runner born?” is a two-reasoning-hop question because the model has to resolve a director and then a birth year. This is the sense of “hop” used in MuSiQue and elsewhere in the QA-benchmark tradition.\nRetrieval-hops are a property of the index. How many graph edges does the supporting evidence live across? A retrieval-hop is a step across a link in the corpus itself: a citation, a shared concept, a cross-document reference. This is the sense of “hop” used in HopRAG (Zhang & Others, 2024) and IRCoT (Trivedi et al., 2023).\nThe two are correlated but not the same, and mistaking one for the other leads to the objection we heard most often at talks:\n\n“If the question is 3-hop, why not just decompose it into three 1-hop questions?”\nBecause question decomposition operates on the question side. It reduces the reasoning-hop count. It does not help you assemble the context envelope, which lives on the index side. If the supporting evidence is spread across a graph, running three separate similarity queries against that graph gets you three separate one-hop retrievals, none of which is the walk-informed neighborhood that would have surfaced the envelope in one shot. Decomposition composes with graph retrieval; it does not replace it.\n\nThe mechanism"
+  },
+  {
+    "objectID": "index.html#retrieval-as-a-trajectory",
+    "href": "index.html#retrieval-as-a-trajectory",
+    "title": "Retrieval as trajectory",
+    "section": "Retrieval as a trajectory",
+    "text": "Retrieval as a trajectory\nThe alternative to “one query, top-K by similarity” is “walk the graph.” Chunks, concepts, and documents are nodes. Edges come cheaply: concept-concept links from a wiki or from term co-occurrence, chunk-concept from typed frontmatter or entity extraction, document-chunk from layout parsing. Once the graph exists, a random walk with restart gives you a stationary distribution that captures where information tends to cluster:\n\\[\n\\boldsymbol{\\pi} = c \\cdot \\boldsymbol{\\pi}_0 + (1 - c) \\cdot \\mathbf{P}^{\\top} \\boldsymbol{\\pi}\n\\]\nThe walker restarts at a seed node with probability \\(c\\), otherwise it follows an outbound edge, and it repeats until the distribution \\(\\boldsymbol{\\pi}\\) stops moving. The result is a personalized-PageRank score over the whole graph, one score per node, telling you how much local neighborhood a node absorbs from the seed.\nThe animation below runs this. Yellow nodes are the seed set; darker nodes have accumulated more probability mass through the walk; the graph structure controls where the mass ends up.\n\n\n\n\nLive simulation by Priscila Moreira. Refresh the page or click a node to reseed. What matters visually: mass flows along dense sub-graphs, and short paths through concept edges pull mass across document boundaries that similarity search would treat as unrelated.\n\n\n\nWhy the walk happens before the question arrives\nThe RWR is not run at query time. The stationary distribution is computed once, offline, and cached. When a question comes in, the retrieval step is:\n\nUse similarity to identify a small seed set of chunks or concepts related to the question.\nRead off the pre-computed walk-informed neighborhood around that seed.\nRe-rank the neighborhood locally against the question.\n\nThis is why “just decompose the question” is not a substitute. The graph structure that the walk discovered is already there. The question is used to choose which walk-informed neighborhood to pull, not to run a fresh walk from scratch. Decomposition helps you seed more precisely; it does not replace the trajectory.\nThe result"
+  },
+  {
+    "objectID": "index.html#what-this-buys-you",
+    "href": "index.html#what-this-buys-you",
+    "title": "Retrieval as trajectory",
+    "section": "What this buys you",
+    "text": "What this buys you\nOn MuSiQue, using a wiki-style graph built from the corpus itself, the walk-informed neighborhood catches supporting evidence that dense similarity misses on the second, third, and fourth hop. See the data appendix for the rank tables.\nThe honest caveats:\n\nThe strongest evidence to date is on the gold-only subset: questions where the supporting evidence is known to be present in the corpus. This isolates the retrieval problem from the recall problem.\nFull-scale evaluation on the 21,000-chunk corpus is in progress at the time of writing. The rank-distribution collapse we see with dense retrieval at that scale is real; the exact numbers for graph-informed retrieval at the same scale are still being validated. Values published here are updated as runs complete.\nGraph construction is not free. If the corpus does not come with links, they have to be extracted. Wikis pay for themselves here, because the graph is a side effect of writing; extracted graphs from raw PDFs cost more.\n\nDeeper"
+  },
+  {
+    "objectID": "index.html#operator-splitting",
+    "href": "index.html#operator-splitting",
+    "title": "Retrieval as trajectory",
+    "section": "Operator splitting",
+    "text": "Operator splitting\nThe RWR update \\(\\boldsymbol{\\pi} = c \\cdot \\boldsymbol{\\pi}_0 + (1 - c) \\cdot \\mathbf{P}^{\\top} \\boldsymbol{\\pi}\\) is a fixed-point iteration for a linear operator: a convex combination of the restart operator (which localizes) and the transition operator (which diffuses). This is a Douglas-Rachford-style split, and it lets you reason about which corpus properties affect which operator. Restart probability controls how far the mass travels from the seed before restarting; edge structure controls what the diffusion looks like when it does travel.\nThe practical upshot: tuning the retrieval is not a matter of picking a better embedding. It is a matter of adjusting the two operators. Restart up if the walk is drifting too far. Add edges if the mass is not reaching the neighborhoods where the evidence lives.\nMore on this in follow-up notes as the theory gets written up.\nPractical takeaways"
+  },
+  {
+    "objectID": "index.html#what-to-do-with-all-this",
+    "href": "index.html#what-to-do-with-all-this",
+    "title": "Retrieval as trajectory",
+    "section": "What to do with all this",
+    "text": "What to do with all this\n\nIf your corpus is on the order of a thousand chunks and each question needs one chunk to answer, dense RAG is fine. You do not have an envelope problem.\nIf your corpus is on the order of ten thousand chunks and your questions cross-reference multiple documents, envelope assembly matters. Dense RAG will get first-hop evidence and miss most of the rest.\nWiki-style graphs are a cheap way to get envelope-assembly for free. If your team is already writing linked notes, the graph is already there. See the llm-wiki-memory-template for a scaffold.\nGraphRAG-style community summaries (Edge et al., 2024) solve a related problem via hierarchical summarization instead of random walks. If your corpus is well-suited to Leiden communities, that path exists.\nIf the corpus does not come with links, plan for a graph-construction step. Concept extraction, entity linking, and typed-edge frontmatter all work; pick whichever fits your pipeline.\n\nLearn more"
+  },
+  {
+    "objectID": "index.html#where-to-go-from-here",
+    "href": "index.html#where-to-go-from-here",
+    "title": "Retrieval as trajectory",
+    "section": "Where to go from here",
+    "text": "Where to go from here\n\nData appendix: the rank tables, the gold-only comparison, the methodology.\nThe WGRA talk: full slides at chrissweet.github.io/wgra-talk-2026 if you want the visual walk-through.\nThe wiki-memory template: github.com/crcresearch/llm-wiki-memory-template for the pattern that makes graph construction a side effect of writing.\nThe Markov RAG source: github.com/tcflab/markov_embeddings_and_rag for the embedding-and-walk pipeline."
+  },
+  {
+    "objectID": "index.html#references",
+    "href": "index.html#references",
+    "title": "Retrieval as trajectory",
+    "section": "References",
+    "text": "References\n\n\nEdge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., Truitt, S., & Larson, J. (2024). From local to global: A graph RAG approach to query-focused summarization. arXiv Preprint arXiv:2404.16130.\n\n\nLiu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., & Liang, P. (2024). Lost in the middle: How language models use long contexts. Transactions of the Association for Computational Linguistics, 12, 157–173. https://doi.org/10.1162/tacl_a_00638\n\n\nTrivedi, H., Balasubramanian, N., Khot, T., & Sabharwal, A. (2022). MuSiQue: Multihop questions via single-hop question composition. Transactions of the Association for Computational Linguistics, 10, 539–554. https://doi.org/10.1162/tacl_a_00475\n\n\nTrivedi, H., Balasubramanian, N., Khot, T., & Sabharwal, A. (2023). Interleaving retrieval with chain-of-thought reasoning for knowledge-intensive multi-step questions. Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers).\n\n\nZhang, H., & Others. (2024). HopRAG: Multi-hop reasoning for logic-aware retrieval-augmented generation. arXiv Preprint."
+  },
+  {
+    "objectID": "index.html#contact",
+    "href": "index.html#contact",
+    "title": "Retrieval as trajectory",
+    "section": "Contact",
+    "text": "Contact\nComments, corrections, and pointers to related work are welcome as issues on this repo, or by email to csweet1@nd.edu.\nThis site is versioned. When a claim changes, the page changes, and the commit history records why. It is meant as a living reference, not a frozen artifact."
+  }
+]
