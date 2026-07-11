@@ -148,6 +148,23 @@ The failure table above says nothing about whether *any* graph-informed retrieve
 
 This is a design shift, not a metric shift. The evaluation of a specific graph-informed retriever against the K = 10 table above is the follow-up study. The point of this page is that the table above is the target to aim at, and dense-alone cannot hit it.
 
+[For scientific work]{.kicker}
+
+## Evidence-based reasoning is envelope assembly
+
+The "small corpus, single-hop" carve-out later on is a real case. It does not describe scientific work.
+
+A scientific claim is not answered by a chunk; it is *supported* by one. Answering "was gene X shown to affect phenotype Y?" is not "find the sentence that says so." It is finding the primary paper, its methods, its sample size, its dataset, any preprint or replication attempt, and the chunks in citing papers that agree or disagree. Evidence-based reasoning is multi-source by construction, which makes evidence-based retrieval multi-hop by construction.
+
+Four shapes that put a research corpus in the envelope regime the moment it exists:
+
+- **A claim needs provenance.** The chunk stating a finding and the chunk describing how it was measured are different chunks, sometimes in different sections of the same paper, often in different documents (paper, supplementary, preprint, dataset paper).
+- **Replication is a citation walk.** "Has this been replicated?" is a question about the citation graph. Dense similarity does not encode citations.
+- **Method reuse crosses papers.** "What else uses this assay?" links chunks that share a method entity, not chunks that share topic words.
+- **Datasets are cited, not embedded.** Modern papers depend on datasets described elsewhere. Retrieving an analysis without the dataset description retrieves incomplete evidence.
+
+A 500-paper reference library is 5,000 to 10,000 chunks, and every question against it carries an implicit evidence chain whether the user articulates it or not. Single-hop is not a scientific way of asking questions. If you are building RAG over a research corpus, the failure table above is the ordinary operating regime, not a distant edge case.
+
 [Practical takeaways]{.kicker}
 
 ## What to do with all this
